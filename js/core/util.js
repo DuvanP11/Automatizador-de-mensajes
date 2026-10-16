@@ -36,6 +36,8 @@ export function validatePhone(raw, defaultCountryCode = "57") {
   if (digits.length < 7) return { ok: false, digits, waNumber: "", reason: "Muy corto (menos de 7 dígitos)" };
   if (digits.length > 15) return { ok: false, digits, waNumber: "", reason: "Demasiado largo (más de 15 dígitos)" };
   const cc = digitsOnly(defaultCountryCode);
+  if (/^(\d)\1+$/.test(digits)) return { ok: false, digits, waNumber: "", reason: "Número no válido (todos los dígitos iguales)" };
+  if (digits.length === 10 && cc === "57" && digits[0] !== "3") return { ok: false, digits, waNumber: "", reason: "Parece un teléfono fijo (WhatsApp usa celulares que empiezan por 3)" };
   if (digits.length === 10) {
     if (!cc) return { ok: false, digits, waNumber: "", reason: "Falta el indicativo de país (configúralo en Configuración)" };
     return { ok: true, digits, waNumber: cc + digits, reason: "" };
@@ -82,4 +84,11 @@ export function parseMoney(v) {
 
 export function deepClone(o) {
   return JSON.parse(JSON.stringify(o));
+}
+
+/** Separa varios números escritos en una misma celda: "300 1, 310 2 / 320 3". */
+export function splitPhones(raw) {
+  const parts = String(raw ?? "").split(/[,;/|\n\r]+|\s+y\s+/i).map((x) => x.trim()).filter((x) => digitsOnly(x));
+  const seen = new Set();
+  return parts.filter((x) => { const k = digitsOnly(x).slice(-10); if (seen.has(k)) return false; seen.add(k); return true; });
 }

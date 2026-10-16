@@ -246,6 +246,35 @@ await clickText("Confirmar importación (1 filas con cambios)", "dialog"); await
 s = await st();
 check("Al confirmar, el teléfono queda como contacto del cliente elegido", s.clients.find((c) => c.id === "ADL001").contacts.some((c) => c.phone === "3112223344"));
 
+// ---------- Excel con varios números por celda (forma del archivo real) ----------
+await go("clientes");
+await clickText("📞 Importar teléfonos de contacto", "main"); await p.waitForSelector("dialog[open]");
+await (await p.$("#impfile")).uploadFile(D + "/fx/contactos_clientes.xlsx");
+await p.waitForSelector("dialog[open] .kpi");
+const dtxt = await p.$eval("dialog[open]", (d) => d.textContent);
+check("«NAME COMPANY»/«CELULARES» se reconocen sin pedir mapeo y no aparece la palabra 'null'", !dtxt.includes("No pude identificar") && !dtxt.includes("null"), dtxt.slice(0, 150));
+check("Acciones masivas visibles para filas sin cliente en la base", dtxt.includes("Crearlas como clientes nuevos"));
+check("El botón masivo cuenta las 4 filas sin cliente (Alfred, ADN, Inventada ×2)", await p.$$eval("dialog[open] button", (b) => b.some((x) => x.textContent === "Crearlas como clientes nuevos (4)")));
+await p.evaluate(() => [...document.querySelectorAll("dialog[open] button")].find((x) => x.textContent.startsWith("Crearlas como clientes nuevos")).click()); await sleep(300);
+const kp2 = await p.$$eval("dialog[open] .kpi", (k) => Object.fromEntries(k.map((x) => [x.querySelector("span").textContent, x.querySelector("b").textContent])));
+check("Tras crear en bloque ya no quedan filas por revisar", kp2["Revisión manual"] === "0", JSON.stringify(kp2));
+await clickText("Descargar reporte de errores", "dialog"); await sleep(400);
+const nApply = await p.$$eval("dialog[open] button", (b) => b.find((x) => x.textContent.startsWith("Confirmar importación"))?.textContent);
+await p.evaluate(() => [...document.querySelectorAll("dialog[open] button")].find((x) => x.textContent.startsWith("Confirmar importación")).click()); await sleep(400);
+s = await st();
+const adl2 = s.clients.find((c) => c.id === "ADL001");
+check("Varios números → varios contactos del mismo cliente (ADL: 5 nuevos + los previos)", ["3123806392", "3133269056", "3142819248", "3166924463", "3218402214"].every((n) => adl2.contacts.some((c) => c.phone === n)), JSON.stringify(adl2.contacts.map((c) => c.phone)));
+const rent = s.clients.find((c) => c.name === "Alfred Rent Corporativo");
+check("Número basura 0000000000 omitido, los válidos guardados", rent.contacts.map((c) => c.phone).join() === "3002363980,3003232326", JSON.stringify(rent?.contacts));
+const air3 = s.clients.find((c) => c.id === "AIR001");
+check("Fijo 6012011589 no se guarda como WhatsApp", !air3.contacts.some((c) => c.phone === "6012011589") && air3.contacts.some((c) => c.phone === "3004975195"));
+const inv = s.clients.filter((c) => c.name === "Empresa Inventada Uno");
+check("Empresa repetida en el archivo se crea UNA vez con los dos números", inv.length === 1 && inv[0].contacts.length === 2, JSON.stringify(inv));
+check("Fila con solo un número corto/inválido (Bodega Pibox) es error y no crea cliente", !s.clients.some((c) => c.name === "Bodega Pibox"));
+// Generador: elegir contacto entre varios
+await go("generador"); await p.type("#gsearch", "ADL imp"); await sleep(150); await p.keyboard.press("ArrowDown"); await p.keyboard.press("Enter"); await sleep(250);
+check("Generador ofrece elegir entre los varios números del cliente", (await p.$$eval("select option", (o) => o.filter((x) => x.textContent.includes("3166924463")).length)) === 1);
+
 // ---------- Informes ----------
 await go("informes");
 const kpis = await p.$$eval(".kpis .kpi", (k) => Object.fromEntries(k.map((x) => [x.querySelector("span").textContent, x.querySelector("b").textContent])));

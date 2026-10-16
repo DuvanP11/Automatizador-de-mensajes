@@ -1,7 +1,7 @@
 import { h, field, select, toast, confirmDialog, openDialog, downloadWorkbook, emptyState } from "./dom.js";
 import { sheetToMatrix, detectMapping, extractRecords, planImport, applyPlan, summarizePlan, resolveReview, errorReportRows, mappingIsUsable, FIELD_LABELS, statusLabel } from "../core/importer.js";
 import { buildSimpleWorkbook } from "../core/report.js";
-import { normalizeText, validatePhone, isValidEmail, uid } from "../core/util.js";
+import { normalizeText, nameKey, validatePhone, isValidEmail, uid } from "../core/util.js";
 
 const PAGE = 50;
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -140,6 +140,8 @@ export function commercials(state) {
 export function openImport(ctx, onDone, presetKind = "") {
   const { store, XLSX } = ctx;
   const body = h("div");
+  // replaceChildren(null) escribiría la palabra «null»: se filtran los vacíos.
+  const setBody = (...k) => body.replaceChildren(...k.flat().filter((x) => x !== null && x !== undefined && x !== false));
   const dlg = openDialog("Agregar o sincronizar clientes", body, { wide: true });
   const W = { kind: presetKind || "clients", wb: null, sheet: "", matrix: [], det: null, mapping: {}, headerRow: 0, items: [], fileName: "", tab: "all" };
 
@@ -174,7 +176,7 @@ export function openImport(ctx, onDone, presetKind = "") {
         h("li", { text: "La aplicación une cada teléfono con su cliente por ID o por nombre." }),
         h("li", { text: "Desde ese momento, al elegir el cliente en el Generador, su número aparece solo." })),
       h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Descargar Excel de ejemplo", onclick: templateFile }));
-    body.replaceChildren(
+    setBody(
       presetKind ? (presetKind === "directory" ? dirHelp : h("div", { class: "alert info" }, "Sube tu base de clientes: mínimo el nombre (o ID). Si trae celular y correo, también se guardan como contacto.", " ", h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Descargar Excel de ejemplo", onclick: templateFile })))
         : h("fieldset", { class: "card" }, h("legend", { text: "¿Qué vas a importar?" }),
           radio("kind", "directory", "Teléfonos de contacto (los une con clientes ya registrados)", false), radio("kind", "clients", "Base de clientes (crea clientes nuevos y actualiza los existentes)", true)),
@@ -213,7 +215,7 @@ export function openImport(ctx, onDone, presetKind = "") {
       msgBox.replaceChildren(ok ? "" : h("div", { class: "alert err" }, W.kind === "directory" ? "Indica al menos la columna del teléfono y la del cliente o su ID." : "Indica al menos la columna del nombre del cliente o del ID."));
     }
     const msgBox = h("div");
-    body.replaceChildren(
+    setBody(
       h("p", {}, h("strong", { text: W.fileName }), ` · ${W.matrix.length} filas`),
       det.needsReview ? h("div", { class: "alert warn", text: "No pude identificar todas las columnas con seguridad. Revisa y corrige el mapeo." }) : h("div", { class: "alert ok", text: "Columnas reconocidas. Revisa que sean correctas antes de continuar." }),
       W.wb.SheetNames.length > 1 ? field("Hoja", select(W.wb.SheetNames, W.sheet, { onchange: (e) => { W.sheet = e.target.value; loadSheet(); step2(); } })) : null,
@@ -244,17 +246,45 @@ export function openImport(ctx, onDone, presetKind = "") {
         h("td", {}, h("strong", { text: it.clientName || it.record.name || it.record.id || "—" }), h("div", { class: "muted", text: it.message }), it.warnings.map((w) => h("div", { class: "muted", text: `⚠ ${w}` }))),
         h("td", {}, details(it, idx)));
     });
-    body.replaceChildren(
+    setBody(
       h("div", { class: "kpis" }, [["Clientes nuevos", sum.new], ["Clientes actualizados", sum.updated], ["Contactos nuevos", sum.contactsNew], ["Duplicados", sum.duplicates], ["Errores", sum.errors], ["Revisión manual", sum.review]].map(([l, n]) => h("div", { class: "kpi" }, h("b", { text: String(n) }), h("span", { text: l })))),
       sum.pendingConfirm ? h("div", { class: "alert info", text: `${sum.pendingConfirm} cambio(s) sobrescriben datos existentes y están sin marcar. Revisa y marca los que quieras aplicar.` }) : null,
       sum.review ? h("div", { class: "alert warn", text: `${sum.review} fila(s) requieren decisión. Si no las resuelves se omitirán.` }) : null,
       h("div", { class: "tabs", role: "group", "aria-label": "Filtrar filas" }, tabs.map(([k, l, n]) => h("button", { type: "button", "aria-pressed": String(W.tab === k), text: `${l} (${n})`, onclick: () => { W.tab = k; drawPlan(); } }))),
+      bulkBar(),
       shown.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Fila", "Resultado", "Cliente", "Detalle / acción"].map((t) => h("th", { scope: "col", text: t })))), h("tbody", {}, rows))) : emptyState("Nada en esta categoría", ""),
       shown.length > 200 ? h("p", { class: "muted", text: `Mostrando 200 de ${shown.length} filas (todas se procesan al confirmar).` }) : null,
       h("div", { class: "actions end" },
         h("button", { class: "btn btn-ghost", type: "button", text: "← Mapeo de columnas", onclick: step2 }),
         (sum.errors || sum.review || sum.warnings) ? h("button", { class: "btn btn-ghost", type: "button", text: "Descargar reporte de errores", onclick: () => downloadWorkbook(XLSX, buildSimpleWorkbook(XLSX, errorReportRows(W.items), "Errores de importación", [18, 18, 70, 30, 14, 24, 18, 28]), `errores-importacion-${new Date().toISOString().slice(0, 10)}.xlsx`) }) : null,
         h("button", { class: "btn btn-primary", type: "button", text: `Confirmar importación (${applicable} filas con cambios)`, disabled: applicable === 0, onclick: confirm })));
+  }
+
+  const unmatched = () => W.items.filter((i) => i.status === "review" && !i.candidates.length).length;
+  function bulkBar() {
+    const n = unmatched();
+    if (!n) return null;
+    return h("div", { class: "alert warn" },
+      h("strong", { text: `${n} fila(s) no existen en tu base ni tienen nombres parecidos. ` }),
+      "Puedes resolverlas todas de una vez: ",
+      h("div", { class: "actions" },
+        h("button", { class: "btn btn-primary btn-sm", type: "button", text: `Crearlas como clientes nuevos (${n})`, onclick: () => bulk("new") }),
+        h("button", { class: "btn btn-ghost btn-sm", type: "button", text: `Ignorarlas (${n})`, onclick: () => bulk("skip") })));
+  }
+  function bulk(type) {
+    const opts = { kind: W.kind, defaultCountryCode: store.state.config.defaultCountryCode };
+    const growing = [...store.state.clients];
+    W.items = W.items.map((it) => {
+      if (it.status !== "review" || it.candidates.length) return it;
+      if (type === "skip") return resolveReview(growing, it, { type: "skip" }, opts);
+      // Si la misma empresa aparece dos veces en el archivo, la segunda se une a la primera (no se duplica).
+      const nk = nameKey(it.record.name || it.record.legalName);
+      const hit = growing.find((c) => nameKey(c.name) === nk);
+      const out = hit ? resolveReview(growing, it, { type: "merge", uid: hit.uid }, opts) : resolveReview(growing, it, { type: "new" }, opts);
+      if (out.status === "new" && out.newClient) growing.push(out.newClient);
+      return out;
+    });
+    drawPlan();
   }
 
   function details(it, idx) {

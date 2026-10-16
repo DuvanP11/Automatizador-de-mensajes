@@ -1,6 +1,6 @@
 // Importación y sincronización de clientes/contactos. Lógica pura: recibe matrices (filas de celdas)
 // y devuelve un plan revisable. Nada se escribe en la base hasta llamar a applyPlan().
-import { normalizeText, nameKey, idKey, digitsOnly, validatePhone, isValidEmail, uid, deepClone } from "./util.js";
+import { normalizeText, nameKey, idKey, digitsOnly, validatePhone, isValidEmail, uid, deepClone, splitPhones } from "./util.js";
 
 export const FIELD_LABELS = {
   name: "Cliente / empresa",
@@ -16,9 +16,9 @@ export const FIELD_LABELS = {
 
 // Sinónimos ya normalizados con alnum(): minúsculas, sin tildes ni símbolos.
 const SYNONYMS = {
-  name: ["cliente", "nombrecliente", "nombredelcliente", "empresa", "nombreempresa", "nombredelaempresa", "nombrecomercial", "compania", "company", "companyname", "nombre"],
+  name: ["namecompany", "nombreclientes", "clientes", "cliente", "nombrecliente", "nombredelcliente", "empresa", "nombreempresa", "nombredelaempresa", "nombrecomercial", "compania", "company", "companyname", "nombre"],
   id: ["id", "idcliente", "idcompania", "idcompañia", "companyid", "idempresa", "codigo", "codigocliente", "codcliente", "nit", "customerid", "clientid"],
-  phone: ["telefono", "celular", "whatsapp", "numerodecontacto", "numerocontacto", "numero", "tel", "movil", "phone", "mobile", "telefonocontacto", "telefonodecontacto", "ntelefono", "numerodetelefono", "telefono1", "celular1"],
+  phone: ["celulares", "telefonos", "numeros", "whatsapps", "contactos", "numerosdecontacto", "telefono", "celular", "whatsapp", "numerodecontacto", "numerocontacto", "numero", "tel", "movil", "phone", "mobile", "telefonocontacto", "telefonodecontacto", "ntelefono", "numerodetelefono", "telefono1", "celular1"],
   legalName: ["razonsocial"],
   contactName: ["nombrecontacto", "nombredelcontacto", "contacto", "persona", "personacontacto", "responsable", "nombrecontactoprincipal"],
   email: ["correo", "email", "correoelectronico", "mail", "emailcontacto", "correocontacto"],
@@ -35,6 +35,7 @@ function scoreHeader(label, field) {
   const a = alnum(label);
   if (!a) return 0;
   if (SYNONYMS[field].includes(a)) return 1;
+  if (a.endsWith("s") && SYNONYMS[field].includes(a.slice(0, -1))) return 1; // plurales: «Celulares», «Teléfonos»
   // Coincidencia parcial: el encabezado contiene un sinónimo largo ("Teléfono de contacto 2").
   for (const s of SYNONYMS[field]) if (s.length >= 5 && a.includes(s)) return 0.6;
   return 0;
@@ -188,7 +189,7 @@ function fieldChange(client, field, value) {
   return { kind: "field", field, old, new: value, apply: !old };
 }
 
-function contactChanges(client, rec, phoneInfo, warnings) {
+function contactChangesOne(client, rec, phoneInfo, warnings) {
   const changes = [];
   const hasPhone = !!rec.phone && phoneInfo.ok;
   const email = rec.email && isValidEmail(rec.email) ? rec.email.trim() : "";
@@ -215,11 +216,22 @@ function contactChanges(client, rec, phoneInfo, warnings) {
     if (contacts.some((c) => normalizeText(c.email) === normalizeText(email))) return changes;
     const target = byName || contacts.find((c) => !c.email);
     if (target) changes.push({ kind: "contact-replace", cid: target.cid, field: "email", old: target.email || "", new: email, apply: !target.email });
-    else changes.push({ kind: "contact-add", contact: { cid: uid("ct"), name: rec.contactName, phone: "", email }, apply: true });
+    else changes.push({ kind: "contact-add", contact: { cid: uid("ct"), name: rec.contactName, phone: "", email, primary: false }, apply: true });
     return changes;
   }
-  changes.push({ kind: "contact-add", contact: { cid: uid("ct"), name: rec.contactName, phone: rec.phone, email }, apply: true });
+  changes.push({ kind: "contact-add", contact: { cid: uid("ct"), name: rec.contactName, phone: rec.phone, email, primary: false }, apply: true });
   return changes;
+}
+
+/** Genera cambios de contacto para cada número válido de la fila (el nombre y el correo van con el primero). */
+function contactChanges(client, rec, goodPhones, warnings) {
+  if (!goodPhones.length) return contactChangesOne(client, { ...rec, phone: "" }, { ok: false }, warnings);
+  const out = [];
+  goodPhones.forEach((ph, i) => {
+    const r = i === 0 ? { ...rec, phone: ph } : { ...rec, phone: ph, contactName: "", email: "" };
+    out.push(...contactChangesOne(client, r, { ok: true }, i === 0 ? warnings : []));
+  });
+  return out;
 }
 
 /** Simula en la copia de trabajo los cambios propuestos para detectar repetidos dentro del mismo archivo. */
@@ -263,7 +275,11 @@ function summarize(c) {
 function planRecord(rec, ctx, force) {
   const { kind, work, index, cc } = ctx;
   const item = emptyItem(rec);
-  const phoneInfo = rec.phone ? validatePhone(rec.phone, cc) : { ok: false, reason: "Sin teléfono" };
+  // Una celda puede traer varios números separados por coma, punto y coma, «/» o «y».
+  const phoneParts = splitPhones(rec.phone).map((raw) => ({ raw, info: validatePhone(raw, cc) }));
+  const goodPhones = phoneParts.filter((x) => x.info.ok).map((x) => x.raw);
+  const badPhones = phoneParts.filter((x) => !x.info.ok);
+  const phoneInfo = goodPhones.length ? { ok: true } : phoneParts.length ? phoneParts[0].info : { ok: false, reason: "Sin teléfono" };
   const name = rec.name || rec.legalName;
 
   if (!name && !rec.id) {
@@ -272,10 +288,9 @@ function planRecord(rec, ctx, force) {
   }
   if (kind === "directory") {
     if (!rec.phone && !rec.email) { item.message = "Falta el teléfono"; return item; }
-    if (rec.phone && !phoneInfo.ok && !isValidEmail(rec.email)) { item.message = `Teléfono inválido (${phoneInfo.reason})`; return item; }
-  } else if (rec.phone && !phoneInfo.ok) {
-    item.warnings.push(`Teléfono omitido (${phoneInfo.reason})`);
+    if (rec.phone && !goodPhones.length && !isValidEmail(rec.email)) { item.message = `Teléfono inválido (${phoneInfo.reason})`; return item; }
   }
+  for (const b of badPhones) item.warnings.push(`Número omitido ${b.raw.trim()}: ${b.info.reason}`);
 
   // 1) Resolver el cliente destino.
   let target = null;
@@ -332,7 +347,7 @@ function planRecord(rec, ctx, force) {
       uid: uid("cl"), id: rec.id, name, legalName: rec.legalName && rec.legalName !== name ? rec.legalName : "",
       zone: rec.zone, owner: rec.owner, notes: rec.notes, contacts: [], createdAt: now, updatedAt: now,
     };
-    const ch = contactChanges(client, rec, phoneInfo, item.warnings);
+    const ch = contactChanges(client, rec, goodPhones, item.warnings);
     simulate(client, ch);
     if (client.contacts.length) client.contacts[0].primary = true;
     item.status = "new";
@@ -357,7 +372,7 @@ function planRecord(rec, ctx, force) {
   pushIf(fieldChange(target, "zone", rec.zone));
   pushIf(fieldChange(target, "owner", rec.owner));
   pushIf(fieldChange(target, "notes", rec.notes));
-  changes.push(...contactChanges(target, rec, phoneInfo, item.warnings));
+  changes.push(...contactChanges(target, rec, goodPhones, item.warnings));
   item.changes = changes;
   if (changes.length) {
     item.status = "update";

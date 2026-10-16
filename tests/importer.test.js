@@ -204,3 +204,25 @@ test("directorio: cliente no encontrado sugiere parecidos sin fusionar solo", ()
   assert.deepEqual(items[2].candidates, []); // sin parecidos → solo crear/ignorar
   assert.deepEqual(applyPlan(clients, items).clients[0].contacts.map((c) => c.phone), ["3001112233"]); // el teléfono del archivo NO se aplicó solo
 });
+
+test("varios números en una celda → varios contactos; basura y fijos se omiten con aviso", () => {
+  const { map, recs } = load([["NAME COMPANY", "CELULARES"],
+    ["Alfa Ltda", "3001112233, 3133269056; 3142819248 / 0000000000, 317435919, 6012011589, 3166924463 y 3001112233"],
+    ["Solo Basura SAS", "0000000000"]], "directory");
+  assert.equal(map.needsReview, false); // «NAME COMPANY» y «CELULARES» (plural) se reconocen con seguridad
+  const items = planImport(base(), recs, { kind: "directory" });
+  assert.equal(items[0].status, "update");
+  assert.deepEqual(items[0].changes.map((c) => c.contact.phone), ["3133269056", "3142819248", "3166924463"]); // 3001112233 ya existía y se repite
+  assert.equal(items[0].warnings.length, 3); // ceros, 9 dígitos, fijo
+  assert.ok(items[0].warnings.some((w) => w.includes("fijo")));
+  assert.equal(items[1].status, "error");
+  const { clients } = applyPlan(base(), items);
+  assert.equal(clients[0].contacts.length, 4);
+});
+
+test("cliente nuevo con varios números: el primero queda como principal", () => {
+  const { recs } = load([["Cliente", "Celulares"], ["Nueva SAS", "3011111111, 3022222222"]]);
+  const [it] = planImport(base(), recs);
+  assert.equal(it.status, "new");
+  assert.deepEqual(it.newClient.contacts.map((c) => [c.phone, c.primary]), [["3011111111", true], ["3022222222", false]]);
+});
