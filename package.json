@@ -1,0 +1,1 @@
+{"name":"automatizador-de-mensajes-pibox","version":"1.0.0","description":"Generador de mensajes personalizados para clientes de entregas optimizadas","private":true,"scripts":{"dev":"npx serve .","start":"npx serve .","build":"echo 'Proyecto estático, sin build necesario'"},"author":"Duvan Perilla","license":"MIT"}
