@@ -1,125 +1,33 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Automatizador de Mensajes - Pibox</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="theme-color" content="#5b2a86">
+  <meta name="description" content="Herramienta comercial interna de Pibox: clientes, plantillas de WhatsApp, seguimiento e informes.">
+  <title>Automatizador de Mensajes · Pibox</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="manifest" href="assets/site.webmanifest">
   <link rel="stylesheet" href="css/styles.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
 </head>
-
 <body>
-  <header class="header">
-    <div class="container">
-      <h1>Automatizador de Mensajes</h1>
-      <p>Personaliza tus mensajes para clientes de entregas optimizadas</p>
-    </div>
-  </header>
-
-  <main class="container">
-    <div class="grid">
-      <section class="card">
-        <h2>Configuración del mensaje</h2>
-
-        <div class="form-group">
-          <label for="searchInput">Buscar cliente</label>
-          <input type="text" id="searchInput" placeholder="Buscar por nombre, ID de compañía o localidad..." autocomplete="off">
-          <div id="suggestions" class="suggestions"></div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="clientName">Nombre del cliente</label>
-            <input type="text" id="clientName" placeholder="Ej: Ambrosia Toy Store">
-          </div>
-          <div class="form-group">
-            <label for="clientId">ID / Compañía</label>
-            <input type="text" id="clientId" placeholder="Ej: AMB-001">
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="zoneSelect">Zona</label>
-            <select id="zoneSelect">
-              <option value="Chapinero">Chapinero</option>
-              <option value="Los martires">Los mártires</option>
-              <option value="Antonio nariño">Antonio Nariño</option>
-              <option value="Otra">Otra</option>
-            </select>
-          </div>
-          <div class="form-group" id="customZoneGroup" style="display: none;">
-            <label for="customZone">Especificar zona</label>
-            <input type="text" id="customZone" placeholder="Ej: Teusaquillo">
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="phoneInput">Teléfono (WhatsApp)</label>
-            <input type="tel" id="phoneInput" placeholder="Ej: 573001234567">
-          </div>
-          <div class="form-group">
-            <label for="emailInput">Correo electrónico</label>
-            <input type="email" id="emailInput" placeholder="Ej: contacto@empresa.com">
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="emojiHeader">Emoji inicial</label>
-            <input type="text" id="emojiHeader" placeholder="Ej: 👋" maxlength="4">
-          </div>
-          <div class="form-group">
-            <label for="emojiFooter">Emoji final</label>
-            <input type="text" id="emojiFooter" placeholder="Ej: ✨" maxlength="4">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="excelContacts">Importar Excel de contactos (.xlsx)</label>
-          <input type="file" id="excelContacts" accept=".xlsx, .xls">
-          <small>Columnas recomendadas: Cliente, Razón Social, Teléfono, Celular, WhatsApp, ID, CompanyID</small>
-          <small id="contactsStatus" style="color: #22c55e; font-weight: 500; min-height: 1.2rem; display: block;"></small>
-        </div>
-
-        <div class="form-group">
-          <label for="excelEmails">Importar Excel de correos (.xlsx)</label>
-          <input type="file" id="excelEmails" accept=".xlsx, .xls">
-          <small>Columnas recomendadas: Cliente, Razón Social, Correo, Email, ID, CompanyID</small>
-          <small id="emailsStatus" style="color: #22c55e; font-weight: 500; min-height: 1.2rem; display: block;"></small>
-        </div>
-
-        <div class="actions">
-          <button id="personalizeBtn" class="btn btn-primary">Generar mensaje personalizado</button>
-          <button id="randomEmojisBtn" class="btn btn-secondary">Emojis aleatorios sutiles</button>
-          <button id="resetBtn" class="btn btn-ghost">Reiniciar</button>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>Mensaje generado</h2>
-        <textarea id="messageOutput" rows="16" readonly placeholder="Aquí aparecerá tu mensaje personalizado..."></textarea>
-        <div class="actions">
-          <button id="copyBtn" class="btn btn-primary">Copiar mensaje</button>
-          <button id="waBtn" class="btn btn-success">Abrir en WhatsApp</button>
-        </div>
-        <div id="copyToast" class="toast" hidden>¡Mensaje copiado al portapapeles!</div>
-      </section>
-    </div>
-  </main>
-
-  <footer class="footer">
-    <div class="container">
-      <p>Desarrollado para el equipo comercial de Pibox</p>
-    </div>
-  </footer>
-
-  <script src="js/app.js"></script>
+  <a class="skip" href="#main">Saltar al contenido</a>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="#/generador" aria-label="Automatizador de Mensajes Pibox, ir al inicio">
+        <img src="assets/logo-icon.svg" alt="" width="38" height="38">
+        <span>Automatizador<small>de Mensajes · Pibox</small></span>
+      </a>
+      <nav class="nav" id="nav" aria-label="Secciones"></nav>
+      <div class="side-foot" id="sideFoot"></div>
+    </aside>
+    <main class="main" id="main" tabindex="-1"></main>
+  </div>
+  <noscript><p style="padding:1rem">Esta aplicación necesita JavaScript.</p></noscript>
+  <script type="module" src="js/ui/app.js"></script>
 </body>
-
 </html>

@@ -1,13 +1,18 @@
 {
   "name": "automatizador-de-mensajes-pibox",
-  "version": "1.0.0",
-  "description": "Generador de mensajes personalizados para clientes de entregas optimizadas",
+  "version": "2.0.0",
+  "description": "Herramienta comercial: clientes, plantillas de WhatsApp, seguimiento e informes",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "npx serve .",
     "start": "npx serve .",
+    "test": "node --test tests/",
     "build": "echo 'Proyecto estático, sin build necesario'"
   },
   "author": "Duvan Perilla",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  }
 }
