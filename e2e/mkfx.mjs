@@ -15,4 +15,12 @@ w("clientes_nuevos.xlsx", [["Cliente", "ID cliente", "WhatsApp", "Localidad", "C
   ["", "", "3015550003", "", ""]]);
 w("raro.xlsx", [["Foo", "Bar"], ["1", "2"]]);
 w("telefonos_parecidos.xlsx", [["Cliente", "Celular"], ["ADL importaciones", "3112223344"]]);
+w("contactos_clientes.xlsx", [["NAME COMPANY", "CELULARES"],
+  ["ADL importaciones SAS", "3123806392, 3133269056, 3142819248, 3166924463, 3218402214"],
+  ["ADN ANIMAL", "3196699895"],
+  ["Alfred Rent Corporativo", "0000000000, 3002363980, 3003232326"],
+  ["Airtempe SAS", "3004975195, 3107349057, 6012011589"],
+  ["Empresa Inventada Uno", "3151110001"],
+  ["Empresa Inventada Uno", "3151110002"],
+  ["Bodega Pibox", "12232323"]]);
 console.log("ok");

@@ -64,7 +64,7 @@ export function renderGenerator(root, ctx) {
     search.value = g.query; nameIn.value = g.name; phoneIn.value = g.phone;
     idOut.value = c?.id || ""; emailOut.value = g.email;
     zoneSel.value = g.zoneSel; customZone.value = g.customZone; customField.hidden = g.zoneSel !== "Otra";
-    contactSel.replaceChildren(...(c?.contacts || []).map((ct) => h("option", { value: ct.cid, text: `${ct.name || "Contacto"} — ${ct.phone || ct.email || "sin datos"}`, selected: ct.cid === g.contactCid })));
+    contactSel.replaceChildren(...(c?.contacts || []).map((ct, i) => h("option", { value: ct.cid, text: `${ct.name || `Contacto ${i + 1}`} — ${ct.phone || ct.email || "sin datos"}`, selected: ct.cid === g.contactCid })));
     contactField.hidden = !c || c.contacts.length < 2;
     tplView.value = tpl()?.body || "";
     checkPhone();

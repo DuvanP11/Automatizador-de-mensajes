@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.2 — Varios teléfonos por celda
+- Una celda con varios números (separados por coma, `;`, `/` o «y») ahora crea un contacto por número; el primero queda como principal y los repetidos se descartan.
+- Números inválidos (`0000000000`, incompletos, fijos que no sirven para WhatsApp) se omiten con aviso; no bloquean al resto de la fila.
+- Encabezados en plural o con otro orden (`CELULARES`, `NAME COMPANY`) se reconocen con seguridad y el asistente salta al resumen.
+- Acciones masivas para filas sin cliente en la base: «Crearlas como clientes nuevos» (una empresa repetida en el archivo se crea una sola vez) o «Ignorarlas».
+- Corregido: aparecía la palabra «null» en el mapeo de columnas.
+
+## 2.0.1 — Teléfonos y WhatsApp
+- «Abrir en WhatsApp» siempre activo con aviso claro; importación directa de teléfonos con sugerencias de clientes parecidos.
+
 ## 2.0.0 — Evolución comercial
 
 ### Añadido
