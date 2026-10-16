@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.3 — Emojis en WhatsApp
+- Corregido: los emojis llegaban a WhatsApp como «�». Causa: `wa.me` los corrompe al redirigir. Ahora se abre `api.whatsapp.com/send` directamente, que los conserva (verificado contra el servidor de WhatsApp con 👋 y 🚚).
+
 ## 2.0.2 — Varios teléfonos por celda
 - Una celda con varios números (separados por coma, `;`, `/` o «y») ahora crea un contacto por número; el primero queda como principal y los repetidos se descartan.
 - Números inválidos (`0000000000`, incompletos, fijos que no sirven para WhatsApp) se omiten con aviso; no bloquean al resto de la fila.

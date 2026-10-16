@@ -128,6 +128,10 @@ export function resolveZone(selected, custom) {
   return selected;
 }
 
+/**
+ * Se usa api.whatsapp.com/send y NO wa.me: wa.me reemplaza los emojis por «�» (%EF%BF%BD) al redirigir,
+ * mientras que api.whatsapp.com (a donde wa.me redirige) los conserva tal cual.
+ */
 export function whatsappUrl(waNumber, text) {
-  return `https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`;
+  return `https://api.whatsapp.com/send/?phone=${waNumber}&text=${encodeURIComponent(text)}&type=phone_number&app_absent=0`;
 }
