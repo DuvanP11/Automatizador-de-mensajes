@@ -8,12 +8,15 @@ const MAX_BYTES = 10 * 1024 * 1024;
 
 export function renderClients(root, ctx) {
   const { store, XLSX } = ctx;
+  store0 = () => store.state;
   const S = () => store.state;
   const view = (ctx.clientsView ||= { q: "", page: 0 });
   const tableHost = h("div");
   const search = h("input", { type: "search", id: "cq", placeholder: "Buscar por nombre, ID, zona, comercial…", value: view.q, oninput: (e) => { view.q = e.target.value; view.page = 0; drawTable(); } });
 
   function drawTable() {
+    const stat = document.getElementById("phoneStat");
+    if (stat) { stat.textContent = phoneStat(); stat.className = `alert ${store.state.clients.some((c) => c.contacts.some((x) => x.phone)) ? "info" : "warn"}`; }
     const q = normalizeText(view.q);
     const all = S().clients.filter((c) => !q || [c.name, c.id, c.zone, c.owner, c.legalName].some((v) => normalizeText(v).includes(q)));
     const pages = Math.max(1, Math.ceil(all.length / PAGE));
@@ -110,11 +113,18 @@ export function renderClients(root, ctx) {
 
   root.append(
     h("div", { class: "page-head" }, h("div", {}, h("h1", { text: "Clientes y contactos" }), h("p", { text: "Base de clientes y directorio de teléfonos. Un cliente puede tener varios contactos." })),
-      h("div", { class: "actions" }, undoBtn, h("button", { class: "btn btn-ghost", type: "button", text: "+ Nuevo cliente", onclick: () => openEdit(null) }), h("button", { class: "btn btn-primary", type: "button", text: "Agregar o sincronizar clientes", onclick: () => openImport(ctx, () => { undoBtn.hidden = !ctx.lastImportUndo; drawTable(); }) }))),
+      h("div", { class: "actions" }, undoBtn, h("button", { class: "btn btn-ghost", type: "button", text: "+ Nuevo cliente", onclick: () => openEdit(null) }), h("button", { class: "btn btn-ghost", type: "button", text: "Agregar o sincronizar clientes", onclick: () => openImport(ctx, () => { undoBtn.hidden = !ctx.lastImportUndo; drawTable(); }) }), h("button", { class: "btn btn-primary", type: "button", text: "📞 Importar teléfonos de contacto", onclick: () => openImport(ctx, () => { undoBtn.hidden = !ctx.lastImportUndo; drawTable(); }, "directory") }))),
+    h("div", { class: `alert ${S().clients.some((c) => c.contacts.some((x) => x.phone)) ? "info" : "warn"}`, id: "phoneStat", text: phoneStat() }),
     h("div", { class: "card" }, field("Buscar", search), tableHost),
   );
   drawTable();
 }
+
+function phoneStat() {
+  const cs = store0().clients, n = cs.filter((c) => c.contacts.some((x) => x.phone)).length;
+  return n ? `${n} de ${cs.length} clientes tienen teléfono guardado.` : "Ningún cliente tiene teléfono todavía. Pulsa «Importar teléfonos de contacto» y sube tu Excel con nombre y celular.";
+}
+let store0 = () => ({ clients: [] });
 
 export function commercials(state) {
   const set = new Set(state.config.commercials || []);
@@ -127,12 +137,18 @@ export function commercials(state) {
 // ---------------------------------------------------------------------------------------------
 // Asistente de importación / sincronización
 
-function openImport(ctx, onDone) {
+export function openImport(ctx, onDone, presetKind = "") {
   const { store, XLSX } = ctx;
   const body = h("div");
   const dlg = openDialog("Agregar o sincronizar clientes", body, { wide: true });
-  const W = { kind: "clients", wb: null, sheet: "", matrix: [], det: null, mapping: {}, headerRow: 0, items: [], fileName: "", tab: "all" };
+  const W = { kind: presetKind || "clients", wb: null, sheet: "", matrix: [], det: null, mapping: {}, headerRow: 0, items: [], fileName: "", tab: "all" };
 
+  function templateFile() {
+    const aoa = W.kind === "directory"
+      ? [["Cliente", "ID cliente", "Nombre contacto", "Celular", "Correo"], ["Nombre exacto del cliente", "", "Persona de contacto", "3001234567", ""]]
+      : [["Cliente", "ID cliente", "Celular", "Localidad", "Comercial"], ["Nombre del cliente", "ABC001", "3001234567", "Chapinero", ""]];
+    downloadWorkbook(XLSX, buildSimpleWorkbook(XLSX, aoa, "Hoja1", [30, 14, 24, 16, 28]), W.kind === "directory" ? "plantilla-telefonos.xlsx" : "plantilla-clientes.xlsx");
+  }
   function step1() {
     const fileIn = h("input", { type: "file", id: "impfile", accept: ".xlsx,.xls,.csv" });
     const status = h("div", { "aria-live": "polite" });
@@ -145,15 +161,24 @@ function openImport(ctx, onDone) {
         const buf = await f.arrayBuffer();
         W.wb = XLSX.read(buf, { type: "array", cellNF: true, cellDates: true });
         W.fileName = f.name; W.sheet = W.wb.SheetNames[0];
-        loadSheet(); step2();
+        loadSheet();
+        // Si las columnas se reconocen con seguridad, se salta directo al resumen (se puede volver a corregir).
+        if (!W.det.needsReview && mappingIsUsable(W.mapping, W.kind)) step3(); else step2();
       } catch (e) {
         status.replaceChildren(h("div", { class: "alert err", text: "No se pudo leer el archivo. Verifica que sea un Excel (.xlsx/.xls) válido y no esté protegido con contraseña." }));
       }
     });
+    const dirHelp = h("div", { class: "alert info" },
+      h("strong", { text: "Cómo funciona" }),
+      h("ol", {}, h("li", { text: "Sube un Excel con una columna del nombre del cliente (o su ID) y otra con el celular." }),
+        h("li", { text: "La aplicación une cada teléfono con su cliente por ID o por nombre." }),
+        h("li", { text: "Desde ese momento, al elegir el cliente en el Generador, su número aparece solo." })),
+      h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Descargar Excel de ejemplo", onclick: templateFile }));
     body.replaceChildren(
-      h("fieldset", { class: "card" }, h("legend", { text: "¿Qué vas a importar?" }),
-        radio("kind", "clients", "Base de clientes (crea clientes nuevos y actualiza los existentes)", true), radio("kind", "directory", "Directorio de teléfonos (relaciona contactos con clientes ya registrados)")),
-      field("Archivo Excel", fileIn, "Se procesa en tu navegador; los datos no se envían a ningún servidor. Mínimo: nombre o ID del cliente (y teléfono para el directorio)."),
+      presetKind ? (presetKind === "directory" ? dirHelp : h("div", { class: "alert info" }, "Sube tu base de clientes: mínimo el nombre (o ID). Si trae celular y correo, también se guardan como contacto.", " ", h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Descargar Excel de ejemplo", onclick: templateFile })))
+        : h("fieldset", { class: "card" }, h("legend", { text: "¿Qué vas a importar?" }),
+          radio("kind", "directory", "Teléfonos de contacto (los une con clientes ya registrados)", false), radio("kind", "clients", "Base de clientes (crea clientes nuevos y actualiza los existentes)", true)),
+      field("Archivo Excel", fileIn, "Se procesa en tu navegador; los datos no se envían a ningún servidor."),
       status);
     body.querySelectorAll('input[name="kind"]').forEach((r) => r.addEventListener("change", () => (W.kind = r.value)));
   }

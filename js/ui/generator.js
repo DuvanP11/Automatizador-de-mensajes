@@ -1,5 +1,6 @@
 import { h, field, select, toast, confirmDialog, insertAtCursor } from "./dom.js";
 import { createEmojiPicker } from "./emoji.js";
+import { openImport } from "./clients.js";
 import { buildValues, renderTemplate, resolveZone, whatsappUrl, VARIABLES } from "../core/templates.js";
 import { validatePhone, normalizeText, nameKey } from "../core/util.js";
 import { newFollowup, updateFollowup, stageOf } from "../core/followup.js";
@@ -36,6 +37,13 @@ export function renderGenerator(root, ctx) {
   const msg = h("textarea", { rows: 16, class: "msg", placeholder: "Selecciona un cliente y pulsa «Regenerar desde plantilla»…" });
   const warnBox = h("div");
   const waBtn = h("button", { class: "btn btn-success", type: "button", text: "Abrir en WhatsApp" });
+  const refreshAfterImport = () => { const c = client(); if (c) setClient(c); else { syncInputs(); drawBanner(); } drawBanner(); };
+  const importPhonesBtn = h("button", { class: "btn btn-secondary btn-sm", type: "button", text: "📞 Importar teléfonos desde Excel", onclick: () => openImport(ctx, refreshAfterImport, "directory") });
+  const bannerHost = h("div");
+  function drawBanner() {
+    const any = S().clients.some((c) => c.contacts.some((x) => x.phone));
+    bannerHost.replaceChildren(any ? "" : h("div", { class: "alert warn" }, h("strong", { text: "Aún no hay teléfonos cargados. " }), "Sube un Excel con el nombre del cliente y su celular y el número aparecerá solo al elegir cada cliente. ", h("button", { class: "btn btn-primary btn-sm", type: "button", text: "📞 Importar teléfonos desde Excel", onclick: () => openImport(ctx, refreshAfterImport, "directory") })));
+  }
   const logChk = h("input", { type: "checkbox", id: "logChk", checked: g.logContact });
   const pickerHost = h("div");
 
@@ -65,8 +73,11 @@ export function renderGenerator(root, ctx) {
   function checkPhone() {
     const v = validatePhone(g.phone, S().config.defaultCountryCode);
     phoneHint.className = `hint ${g.phone && !v.ok ? "error-text" : ""}`;
-    phoneHint.textContent = !g.phone ? "Escribe un número o elige un cliente con teléfono." : v.ok ? `WhatsApp se abrirá con +${v.waNumber}` : `Teléfono no válido: ${v.reason}`;
-    waBtn.disabled = !v.ok;
+    const c = client();
+    if (!g.phone) {
+      phoneHint.textContent = c ? "Este cliente no tiene teléfono guardado: escríbelo aquí o importa tus teléfonos desde Excel." : "Elige un cliente o escribe un número.";
+    } else phoneHint.textContent = v.ok ? `WhatsApp se abrirá con +${v.waNumber}` : `Teléfono no válido: ${v.reason}`;
+    importPhonesBtn.hidden = !!g.phone && v.ok;
     return v;
   }
 
@@ -143,7 +154,10 @@ export function renderGenerator(root, ctx) {
   }
   async function openWa() {
     const v = checkPhone();
-    if (!v.ok) { toast("Corrige el teléfono antes de abrir WhatsApp", "err"); return; }
+    if (!v.ok) {
+      toast(g.phone ? `Teléfono no válido: ${v.reason}` : "Este cliente no tiene teléfono: escríbelo en el campo «Teléfono» o importa tus teléfonos.", "err", 5000);
+      phoneIn.focus(); return;
+    }
     if (!msg.value.trim()) { toast("El mensaje está vacío", "err"); return; }
     if (g.lastWarnings?.length && !(await confirmDialog({ title: "Hay datos faltantes", message: g.lastWarnings.join(" "), confirmText: "Abrir de todos modos" }))) return;
     window.open(whatsappUrl(v.waNumber, msg.value), "_blank", "noopener");
@@ -184,6 +198,7 @@ export function renderGenerator(root, ctx) {
   // --- estructura ---
   root.append(
     h("div", { class: "page-head" }, h("div", {}, h("h1", { text: "Generador de mensajes" }), h("p", { text: "Elige un cliente, revisa el mensaje y ábrelo en WhatsApp. Tú decides cada envío." }))),
+    bannerHost,
     h("div", { class: "grid-2" },
       h("div", {},
         h("section", { class: "card", "aria-labelledby": "h-cli" },
@@ -191,7 +206,7 @@ export function renderGenerator(root, ctx) {
           h("div", { class: "field" }, h("label", { for: "gsearch", text: "Buscar cliente" }), (search.id = "gsearch", search), sugg),
           h("div", { class: "row" }, field("Nombre en el mensaje", nameIn), field("ID cliente / compañía", idOut)),
           contactField,
-          h("div", { class: "row" }, h("div", { class: "field" }, h("label", { for: "gphone", text: "Teléfono (WhatsApp)" }), (phoneIn.id = "gphone", phoneIn), (phoneHint.id = "gphone-h", phoneIn.setAttribute("aria-describedby", "gphone-h"), phoneHint)), field("Correo", emailOut)),
+          h("div", { class: "row" }, h("div", { class: "field" }, h("label", { for: "gphone", text: "Teléfono (WhatsApp)" }), (phoneIn.id = "gphone", phoneIn), (phoneHint.id = "gphone-h", phoneIn.setAttribute("aria-describedby", "gphone-h"), phoneHint), importPhonesBtn), field("Correo", emailOut)),
           h("div", { class: "row" }, field("Zona (opcional)", zoneSel), customField),
           h("div", { class: "actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Guardar este cliente en la base", onclick: saveAsClient, hidden: false }), h("a", { class: "btn btn-ghost btn-sm", href: "#/clientes", text: "Agregar o sincronizar clientes" })),
         ),
@@ -223,6 +238,7 @@ export function renderGenerator(root, ctx) {
   );
   waBtn.addEventListener("click", openWa);
   if (!S().config.emojis.enabled) root.querySelector("h1").after(h("div", { class: "alert info", text: "Los emojis están desactivados en Configuración: se omiten del mensaje final." }));
+  drawBanner();
   syncInputs();
   if (client() || g.name) { if (g.dirty) { msg.value = g.text || ""; drawWarn([], [], true); } else generate(); }
 }
