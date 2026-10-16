@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import XLSX from "xlsx";
-import { sheetToMatrix, detectMapping, extractRecords, planImport, applyPlan, summarizePlan, resolveReview, errorReportRows, mappingIsUsable } from "../js/core/importer.js";
+import { assignOwner, sheetToMatrix, detectMapping, extractRecords, planImport, applyPlan, summarizePlan, resolveReview, errorReportRows, mappingIsUsable } from "../js/core/importer.js";
 
 // Datos 100% ficticios.
 function wbFrom(aoa, opts = {}) {
@@ -225,4 +225,35 @@ test("cliente nuevo con varios números: el primero queda como principal", () =>
   const [it] = planImport(base(), recs);
   assert.equal(it.status, "new");
   assert.deepEqual(it.newClient.contacts.map((c) => [c.phone, c.primary]), [["3011111111", true], ["3022222222", false]]);
+});
+
+test("asignar comercial en bloque: nuevos, existentes sin dueño y existentes con otro dueño", () => {
+  const clients = base();
+  clients[0].owner = "Luis"; // Alfa ya pertenece a Luis; Beta y Gamma sin dueño
+  const { recs } = load([["Cliente", "ID", "Celular"], ["Alfa Ltda", "A001", "3001112233"], ["Beta SAS", "B002", "3112223344"], ["Delta Nueva", "D9", "3205550000"], ["", "", "3001"]]);
+  const plan = planImport(clients, recs);
+  const items = assignOwner(clients, plan, "Juliana", { overwrite: false });
+  assert.equal(items[0].status, "update"); // era 'duplicate': ahora propone cambiar de dueño
+  const ch0 = items[0].changes.find((c) => c.field === "owner");
+  assert.deepEqual([ch0.old, ch0.new, ch0.apply], ["Luis", "Juliana", false]); // no pisa sin confirmar
+  assert.equal(items[1].changes.find((c) => c.field === "owner").apply, true); // sin dueño → se asigna
+  assert.equal(items[2].newClient.owner, "Juliana");
+  assert.equal(items[3].status, "error");
+  assert.equal(plan[2].newClient.owner, ""); // el plan original no muta
+  let res = applyPlan(clients, items).clients;
+  assert.deepEqual(res.map((c) => c.owner).slice(0, 3), ["Luis", "Juliana", ""]);
+  assert.equal(res[3].owner, "Juliana");
+  // con reasignación explícita sí cambia a Alfa
+  const forced = assignOwner(clients, plan, "Juliana", { overwrite: true });
+  assert.equal(applyPlan(clients, forced).clients[0].owner, "Juliana");
+  // sin comercial elegido no cambia nada
+  assert.equal(assignOwner(clients, plan, "  "), plan);
+});
+
+test("asignar comercial: un cliente repetido dentro del archivo recibe el dueño una sola vez", () => {
+  const { recs } = load([["Cliente", "ID", "Celular"], ["Nueva Co", "N1", "3112223344"], ["Nueva Co", "N1", "3112223355"]]);
+  const items = assignOwner(base(), planImport(base(), recs), "Carlos");
+  assert.equal(items[0].newClient.owner, "Carlos");
+  assert.equal(items[1].changes.filter((c) => c.field === "owner").length, 0); // ya lo tiene la fila anterior
+  assert.deepEqual(applyPlan(base(), items).clients.at(-1).contacts.map((c) => c.phone), ["3112223344", "3112223355"]);
 });

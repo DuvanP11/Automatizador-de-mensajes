@@ -23,4 +23,6 @@ w("contactos_clientes.xlsx", [["NAME COMPANY", "CELULARES"],
   ["Empresa Inventada Uno", "3151110001"],
   ["Empresa Inventada Uno", "3151110002"],
   ["Bodega Pibox", "12232323"]]);
+w("clientes_masivos.xlsx", [["Cliente", "ID cliente", "Celular"],
+  ...Array.from({ length: 40 }, (_, i) => [`Masivo Cliente ${String(i + 1).padStart(2, "0")} SAS`, `M${String(i + 1).padStart(3, "0")}`, `31200000${String(i + 10)}`])]);
 console.log("ok");

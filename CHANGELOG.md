@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0 — Asignación de clientes a un comercial
+- **Importación:** nuevo bloque «¿A quién pertenecen estos clientes?» en el asistente. Asigna todos los clientes del archivo a un comercial (por defecto, quien importa si el archivo no trae columna de comercial). Los clientes que ya tienen otro comercial no se tocan salvo que marques «También reasignar…».
+- **Clientes:** filtro por comercial con conteo (incluye «Sin comercial»), columna de comercial visible, selección múltiple y reasignación en bloque. Al reasignar, el seguimiento existente del cliente pasa al nuevo comercial y queda en su historial.
+- **Generador:** opción «Solo mis clientes» y el comercial visible en cada sugerencia.
+- Corregido: si una empresa nueva aparecía dos veces en el archivo, su segundo teléfono se guardaba duplicado.
+
 ## 2.0.3 — Emojis en WhatsApp
 - Corregido: los emojis llegaban a WhatsApp como «�». Causa: `wa.me` los corrompe al redirigir. Ahora se abre `api.whatsapp.com/send` directamente, que los conserva (verificado contra el servidor de WhatsApp con 👋 y 🚚).
 

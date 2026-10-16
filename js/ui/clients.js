@@ -1,6 +1,7 @@
 import { h, field, select, toast, confirmDialog, openDialog, downloadWorkbook, emptyState } from "./dom.js";
-import { sheetToMatrix, detectMapping, extractRecords, planImport, applyPlan, summarizePlan, resolveReview, errorReportRows, mappingIsUsable, FIELD_LABELS, statusLabel } from "../core/importer.js";
+import { assignOwner, sheetToMatrix, detectMapping, extractRecords, planImport, applyPlan, summarizePlan, resolveReview, errorReportRows, mappingIsUsable, FIELD_LABELS, statusLabel } from "../core/importer.js";
 import { buildSimpleWorkbook } from "../core/report.js";
+import { updateFollowup } from "../core/followup.js";
 import { normalizeText, nameKey, validatePhone, isValidEmail, uid } from "../core/util.js";
 
 const PAGE = 50;
@@ -14,36 +15,68 @@ export function renderClients(root, ctx) {
   const tableHost = h("div");
   const search = h("input", { type: "search", id: "cq", placeholder: "Buscar por nombre, ID, zona, comercial…", value: view.q, oninput: (e) => { view.q = e.target.value; view.page = 0; drawTable(); } });
 
+  const NONE = "__sin_comercial__";
+  const bulkBox = h("div");
   function drawTable() {
     const stat = document.getElementById("phoneStat");
     if (stat) { stat.textContent = phoneStat(); stat.className = `alert ${store.state.clients.some((c) => c.contacts.some((x) => x.phone)) ? "info" : "warn"}`; }
     const q = normalizeText(view.q);
-    const all = S().clients.filter((c) => !q || [c.name, c.id, c.zone, c.owner, c.legalName].some((v) => normalizeText(v).includes(q)));
+    view.sel ||= new Set();
+    const everyone = S().clients;
+    const counts = new Map();
+    for (const c of everyone) { const k = c.owner?.trim() || NONE; counts.set(k, (counts.get(k) || 0) + 1); }
+    const owners = [...counts.keys()].filter((k) => k !== NONE).sort((x, y) => x.localeCompare(y, "es"));
+    if (view.owner && !counts.has(view.owner)) view.owner = "";
+    const all = everyone.filter((c) => (!q || [c.name, c.id, c.zone, c.owner, c.legalName].some((v) => normalizeText(v).includes(q))) && (!view.owner || (c.owner?.trim() || NONE) === view.owner));
     const pages = Math.max(1, Math.ceil(all.length / PAGE));
     view.page = Math.min(view.page, pages - 1);
     const slice = all.slice(view.page * PAGE, view.page * PAGE + PAGE);
-    if (!S().clients.length) { tableHost.replaceChildren(emptyState("Aún no hay clientes", "Importa tu base desde Excel o agrega un cliente manualmente.", h("button", { class: "btn btn-primary", type: "button", text: "Agregar o sincronizar clientes", onclick: () => openImport(ctx, drawTable) }))); return; }
-    if (!all.length) { tableHost.replaceChildren(emptyState("Sin resultados", `Ningún cliente coincide con «${view.q}».`)); return; }
-    tableHost.replaceChildren(
-      h("div", { class: "table-wrap" }, h("table", {},
+    if (!everyone.length) { tableHost.replaceChildren(emptyState("Aún no hay clientes", "Importa tu base desde Excel o agrega un cliente manualmente.", h("button", { class: "btn btn-primary", type: "button", text: "Agregar o sincronizar clientes", onclick: () => openImport(ctx, drawTable) }))); return; }
+    const chip = (key, label, n) => h("button", { type: "button", "aria-pressed": String((view.owner || "") === key), text: `${label} (${n})`, onclick: () => { view.owner = key; view.page = 0; drawTable(); } });
+    const chips = h("div", { class: "tabs", role: "group", "aria-label": "Filtrar por comercial" }, chip("", "Todos", everyone.length), owners.map((o) => chip(o, o, counts.get(o))), counts.has(NONE) ? chip(NONE, "Sin comercial", counts.get(NONE)) : null);
+    const selAll = all.length > 0 && all.every((c) => view.sel.has(c.uid));
+    const dl = h("datalist", { id: "bulk-owners" }, commercials(S()).map((o) => h("option", { value: o })));
+    const bulk = view.sel.size ? h("div", { class: "alert info" },
+      h("strong", { text: `${view.sel.size} cliente(s) seleccionado(s). ` }),
+      h("div", { class: "row" },
+        field("Asignar a (comercial)", h("input", { type: "text", list: "bulk-owners", value: view.bulkOwner || "", placeholder: "Nombre del comercial", oninput: (e) => (view.bulkOwner = e.target.value) })),
+        h("div", { class: "field" }, h("label", { text: "\u00a0" }), h("div", { class: "actions", style: "margin:0" },
+          h("button", { class: "btn btn-primary", type: "button", text: "Asignar", onclick: () => reassign(view.bulkOwner || "") }),
+          h("button", { class: "btn btn-ghost", type: "button", text: "Quitar comercial", onclick: () => reassign("") }),
+          h("button", { class: "btn btn-ghost", type: "button", text: "Limpiar selección", onclick: () => { view.sel.clear(); drawTable(); } }))))) : null;
+    tableHost.replaceChildren(...[chips, dl, bulk,
+      all.length ? h("div", { class: "table-wrap" }, h("table", {},
         h("caption", { class: "sr", text: "Clientes y contactos" }),
-        h("thead", {}, h("tr", {}, ["Cliente", "ID", "Zona", "Comercial", "Contactos", ""].map((t) => h("th", { scope: "col", text: t })))),
+        h("thead", {}, h("tr", {},
+          h("th", { scope: "col" }, h("input", { type: "checkbox", checked: selAll, "aria-label": `Seleccionar los ${all.length} clientes filtrados`, title: "Seleccionar todos los filtrados", onchange: (e) => { all.forEach((c) => (e.target.checked ? view.sel.add(c.uid) : view.sel.delete(c.uid))); drawTable(); } })),
+          ["Cliente", "ID", "Zona", "Comercial", "Contactos", ""].map((t) => h("th", { scope: "col", text: t })))),
         h("tbody", {}, slice.map((c) => {
           const withPhone = c.contacts.filter((x) => x.phone);
           const main = c.contacts.find((x) => x.primary && x.phone) || withPhone[0];
           return h("tr", {},
+            h("td", {}, h("input", { type: "checkbox", checked: view.sel.has(c.uid), "aria-label": `Seleccionar ${c.name}`, onchange: (e) => { e.target.checked ? view.sel.add(c.uid) : view.sel.delete(c.uid); drawTable(); } })),
             h("td", {}, h("strong", { text: c.name }), c.legalName ? h("div", { class: "muted", text: c.legalName }) : null),
-            h("td", { class: "nowrap", text: c.id || "—" }), h("td", { text: c.zone || "—" }), h("td", { text: c.owner || "—" }),
+            h("td", { class: "nowrap", text: c.id || "—" }), h("td", { text: c.zone || "—" }),
+            h("td", {}, c.owner ? h("span", { class: "badge", text: c.owner }) : h("span", { class: "muted", text: "Sin comercial" })),
             h("td", {}, main ? h("span", { text: `${main.phone}${c.contacts.length > 1 ? ` (+${c.contacts.length - 1})` : ""}` }) : h("span", { class: "badge warn", text: "Sin teléfono" })),
             h("td", { class: "nowrap" },
               h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Editar", "aria-label": `Editar ${c.name}`, onclick: () => openEdit(c.uid) }), " ",
               h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Eliminar", "aria-label": `Eliminar ${c.name}`, onclick: () => removeClient(c) })));
-        })))),
+        })))) : emptyState("Sin resultados", "Ningún cliente coincide con los filtros."),
       h("div", { class: "actions" },
         h("span", { class: "muted", text: `${all.length} cliente(s) · página ${view.page + 1} de ${pages}` }),
         h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "← Anterior", disabled: view.page === 0, onclick: () => { view.page--; drawTable(); } }),
         h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Siguiente →", disabled: view.page >= pages - 1, onclick: () => { view.page++; drawTable(); } })),
-    );
+    ].filter(Boolean));
+  }
+
+  async function reassign(owner) {
+    const n = view.sel.size, name = owner.trim();
+    const ok = await confirmDialog({ title: name ? "Asignar comercial" : "Quitar comercial", message: name ? `Se asignarán ${n} cliente(s) a «${name}». Si ya tenían otro comercial, se reemplaza, y su seguimiento queda a cargo de «${name}».` : `Se quitará el comercial a ${n} cliente(s).`, confirmText: name ? "Asignar" : "Quitar" });
+    if (!ok) return;
+    store.commit((d) => reassignOwners(d, [...view.sel], name));
+    view.sel.clear(); view.bulkOwner = "";
+    drawTable(); toast(name ? `${n} cliente(s) asignados a ${name} ✓` : "Comercial quitado");
   }
 
   async function removeClient(c) {
@@ -126,6 +159,17 @@ function phoneStat() {
 }
 let store0 = () => ({ clients: [] });
 
+/** Cambia el comercial de los clientes y mantiene coherente el seguimiento ya existente (queda en su historial). */
+export function reassignOwners(draft, uids, owner) {
+  const set = new Set(uids), now = new Date().toISOString();
+  for (const c of draft.clients) {
+    if (!set.has(c.uid) || (c.owner || "") === owner) continue;
+    c.owner = owner; c.updatedAt = now;
+    const fu = draft.followups[c.uid];
+    if (fu && (fu.owner || "") !== owner) draft.followups[c.uid] = updateFollowup(fu, { owner }, { by: draft.config.commercial.name, statuses: draft.config.statuses });
+  }
+}
+
 export function commercials(state) {
   const set = new Set(state.config.commercials || []);
   if (state.config.commercial.name) set.add(state.config.commercial.name);
@@ -143,7 +187,7 @@ export function openImport(ctx, onDone, presetKind = "") {
   // replaceChildren(null) escribiría la palabra «null»: se filtran los vacíos.
   const setBody = (...k) => body.replaceChildren(...k.flat().filter((x) => x !== null && x !== undefined && x !== false));
   const dlg = openDialog("Agregar o sincronizar clientes", body, { wide: true });
-  const W = { kind: presetKind || "clients", wb: null, sheet: "", matrix: [], det: null, mapping: {}, headerRow: 0, items: [], fileName: "", tab: "all" };
+  const W = { kind: presetKind || "clients", wb: null, sheet: "", matrix: [], det: null, mapping: {}, headerRow: 0, base: [], items: [], owner: "", overwrite: false, fileName: "", tab: "all" };
 
   function templateFile() {
     const aoa = W.kind === "directory"
@@ -229,8 +273,28 @@ export function openImport(ctx, onDone, presetKind = "") {
   function step3() {
     const recs = extractRecords(W.matrix, W.headerRow, W.mapping);
     if (!recs.length) { toast("El archivo no tiene filas de datos debajo de los encabezados", "err"); return; }
-    W.items = planImport(store.state.clients, recs, { kind: W.kind, defaultCountryCode: store.state.config.defaultCountryCode });
+    W.base = planImport(store.state.clients, recs, { kind: W.kind, defaultCountryCode: store.state.config.defaultCountryCode });
+    // Si el archivo no trae columna de comercial, por defecto quedan a nombre de quien importa (se puede cambiar o vaciar).
+    W.owner = W.kind === "clients" && W.mapping.owner === undefined ? store.state.config.commercial.name || "" : "";
+    W.overwrite = false;
+    recompute();
     drawPlan();
+  }
+
+  const recompute = () => { W.items = assignOwner(store.state.clients, W.base, W.owner, { overwrite: W.overwrite }); };
+
+  function ownerCard() {
+    const dl = h("datalist", { id: "imp-owners" }, commercials(store.state).map((o) => h("option", { value: o })));
+    const name = W.owner.trim();
+    const assigned = name ? W.items.filter((i) => (i.status === "new" && i.newClient?.owner === name) || (i.status === "update" && i.changes.some((c) => c.field === "owner" && c.new === name && c.apply))).length : 0;
+    const other = name ? W.items.filter((i) => i.status === "update" && i.changes.some((c) => c.field === "owner" && c.new === name && c.old && !c.apply)).length : 0;
+    return h("div", { class: "card", style: "margin-bottom:.75rem" }, dl,
+      h("h3", { text: "¿A quién pertenecen estos clientes?" }),
+      h("div", { class: "row" },
+        field("Asignar a (comercial)", h("input", { type: "text", list: "imp-owners", value: W.owner, placeholder: W.mapping.owner !== undefined ? "Vacío = usar la columna de comercial del archivo" : "Nombre del comercial (opcional)", onchange: (e) => { W.owner = e.target.value; recompute(); drawPlan(); } }),
+          W.mapping.owner !== undefined ? "Tu archivo tiene columna de comercial; si escribes un nombre aquí, ese nombre manda sobre la columna." : "Se verá en la lista de clientes y podrás filtrar y reasignar después."),
+        h("div", { class: "field" }, h("label", { text: "\u00a0" }), h("div", { class: "check" }, h("input", { type: "checkbox", id: "imp-over", checked: W.overwrite, onchange: (e) => { W.overwrite = e.target.checked; recompute(); drawPlan(); } }), h("label", { for: "imp-over", text: "También reasignar clientes que ya tienen otro comercial" })))),
+      name ? h("p", { class: "hint", text: `${assigned} cliente(s) quedarán a nombre de «${name}»${other ? `; ${other} ya tienen otro comercial y NO se tocan (marca la casilla para reasignarlos)` : ""}.` }) : null);
   }
 
   function drawPlan() {
@@ -248,6 +312,7 @@ export function openImport(ctx, onDone, presetKind = "") {
     });
     setBody(
       h("div", { class: "kpis" }, [["Clientes nuevos", sum.new], ["Clientes actualizados", sum.updated], ["Contactos nuevos", sum.contactsNew], ["Duplicados", sum.duplicates], ["Errores", sum.errors], ["Revisión manual", sum.review]].map(([l, n]) => h("div", { class: "kpi" }, h("b", { text: String(n) }), h("span", { text: l })))),
+      ownerCard(),
       sum.pendingConfirm ? h("div", { class: "alert info", text: `${sum.pendingConfirm} cambio(s) sobrescriben datos existentes y están sin marcar. Revisa y marca los que quieras aplicar.` }) : null,
       sum.review ? h("div", { class: "alert warn", text: `${sum.review} fila(s) requieren decisión. Si no las resuelves se omitirán.` }) : null,
       h("div", { class: "tabs", role: "group", "aria-label": "Filtrar filas" }, tabs.map(([k, l, n]) => h("button", { type: "button", "aria-pressed": String(W.tab === k), text: `${l} (${n})`, onclick: () => { W.tab = k; drawPlan(); } }))),
@@ -274,7 +339,7 @@ export function openImport(ctx, onDone, presetKind = "") {
   function bulk(type) {
     const opts = { kind: W.kind, defaultCountryCode: store.state.config.defaultCountryCode };
     const growing = [...store.state.clients];
-    W.items = W.items.map((it) => {
+    W.base = W.base.map((it) => {
       if (it.status !== "review" || it.candidates.length) return it;
       if (type === "skip") return resolveReview(growing, it, { type: "skip" }, opts);
       // Si la misma empresa aparece dos veces en el archivo, la segunda se une a la primera (no se duplica).
@@ -284,6 +349,7 @@ export function openImport(ctx, onDone, presetKind = "") {
       if (out.status === "new" && out.newClient) growing.push(out.newClient);
       return out;
     });
+    recompute();
     drawPlan();
   }
 
@@ -293,7 +359,8 @@ export function openImport(ctx, onDone, presetKind = "") {
       return select(opts, "", { "aria-label": `Decisión para la fila ${it.row}`, onchange: (e) => {
         const v = e.target.value; if (!v) return;
         const res = v === "new" ? { type: "new" } : v === "skip" ? { type: "skip" } : { type: "merge", uid: v.slice(2) };
-        W.items[idx] = resolveReview(store.state.clients, it, res, { kind: W.kind, defaultCountryCode: store.state.config.defaultCountryCode });
+        W.base[idx] = resolveReview(store.state.clients, W.base[idx], res, { kind: W.kind, defaultCountryCode: store.state.config.defaultCountryCode });
+        recompute();
         drawPlan();
       } });
     }
@@ -314,9 +381,19 @@ export function openImport(ctx, onDone, presetKind = "") {
     const before = store.state.clients;
     const { clients, stats } = applyPlan(before, W.items);
     ctx.lastImportUndo = before;
-    store.commit((d) => { d.clients = clients; });
+    const prevOwner = new Map(before.map((c) => [c.uid, c.owner || ""]));
+    const changed = clients.filter((c) => prevOwner.has(c.uid) && prevOwner.get(c.uid) !== (c.owner || "")).map((c) => c.uid);
+    store.commit((d) => {
+      d.clients = clients;
+      // Si cambió el comercial de un cliente que ya tenía seguimiento, el seguimiento queda con el nuevo.
+      for (const uidv of changed) {
+        const fu = d.followups[uidv], c = d.clients.find((x) => x.uid === uidv);
+        if (fu && c) d.followups[uidv] = updateFollowup(fu, { owner: c.owner || "" }, { by: d.config.commercial.name, statuses: d.config.statuses });
+      }
+    });
     dlg.close(); onDone?.();
-    toast(`Importación aplicada: ${stats.created} nuevos, ${stats.updated} actualizados, ${stats.contactsAdded} contactos agregados`, "ok", 6000);
+    const owned = W.owner.trim() ? ` · comercial: ${W.owner.trim()}` : "";
+    toast(`Importación aplicada: ${stats.created} nuevos, ${stats.updated} actualizados, ${stats.contactsAdded} contactos agregados${owned}`, "ok", 6000);
   }
   step1();
 }

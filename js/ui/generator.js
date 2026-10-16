@@ -8,7 +8,7 @@ import { newFollowup, updateFollowup, stageOf } from "../core/followup.js";
 const NONE = "Ninguna";
 
 function freshState() {
-  return { clientUid: null, name: "", phone: "", email: "", contactName: "", contactCid: "", zoneSel: NONE, customZone: "", tplId: "", seed: 0, dirty: false, logContact: true, query: "" };
+  return { clientUid: null, name: "", phone: "", email: "", contactName: "", contactCid: "", zoneSel: NONE, customZone: "", tplId: "", seed: 0, dirty: false, logContact: true, query: "", onlyMine: false };
 }
 
 export function renderGenerator(root, ctx) {
@@ -40,6 +40,7 @@ export function renderGenerator(root, ctx) {
   const refreshAfterImport = () => { const c = client(); if (c) setClient(c); else { syncInputs(); drawBanner(); } drawBanner(); };
   const importPhonesBtn = h("button", { class: "btn btn-secondary btn-sm", type: "button", text: "📞 Importar teléfonos desde Excel", onclick: () => openImport(ctx, refreshAfterImport, "directory") });
   const bannerHost = h("div");
+  const onlyMineChk = h("input", { type: "checkbox", id: "onlyMine", checked: g.onlyMine, onchange: (e) => { g.onlyMine = e.target.checked; showSugg(); } });
   function drawBanner() {
     const any = S().clients.some((c) => c.contacts.some((x) => x.phone));
     bannerHost.replaceChildren(any ? "" : h("div", { class: "alert warn" }, h("strong", { text: "Aún no hay teléfonos cargados. " }), "Sube un Excel con el nombre del cliente y su celular y el número aparecerá solo al elegir cada cliente. ", h("button", { class: "btn btn-primary btn-sm", type: "button", text: "📞 Importar teléfonos desde Excel", onclick: () => openImport(ctx, refreshAfterImport, "directory") })));
@@ -107,10 +108,11 @@ export function renderGenerator(root, ctx) {
   let active = -1, matches = [];
   function showSugg() {
     const q = normalizeText(search.value);
-    matches = q ? S().clients.filter((c) => normalizeText(c.name).includes(q) || normalizeText(c.id).includes(q) || normalizeText(c.zone).includes(q) || normalizeText(c.legalName).includes(q)).slice(0, 8) : [];
+    const mine = normalizeText(S().config.commercial.name);
+    matches = q ? S().clients.filter((c) => (!g.onlyMine || !mine || normalizeText(c.owner) === mine) && (normalizeText(c.name).includes(q) || normalizeText(c.id).includes(q) || normalizeText(c.zone).includes(q) || normalizeText(c.legalName).includes(q))).slice(0, 8) : [];
     active = -1;
     sugg.replaceChildren(...matches.map((c, i) => h("li", { role: "option", id: `sg${i}`, "aria-selected": "false", onmousedown: (e) => { e.preventDefault(); pick(c); } },
-      c.name, h("span", { class: "meta", text: `ID: ${c.id || "—"} · ${c.zone || "Sin zona"}${c.contacts.some((x) => x.phone) ? " · con teléfono" : " · sin teléfono"}` }))));
+      c.name, h("span", { class: "meta", text: `ID: ${c.id || "—"} · ${c.zone || "Sin zona"}${c.contacts.some((x) => x.phone) ? " · con teléfono" : " · sin teléfono"}${c.owner ? ` · de ${c.owner}` : ""}` }))));
     sugg.hidden = !matches.length; search.setAttribute("aria-expanded", String(!!matches.length));
   }
   function pick(c) { sugg.hidden = true; search.setAttribute("aria-expanded", "false"); setClient(c); }
@@ -204,6 +206,7 @@ export function renderGenerator(root, ctx) {
         h("section", { class: "card", "aria-labelledby": "h-cli" },
           h("h2", { id: "h-cli", text: "1 · Cliente" }),
           h("div", { class: "field" }, h("label", { for: "gsearch", text: "Buscar cliente" }), (search.id = "gsearch", search), sugg),
+          S().config.commercial.name ? h("div", { class: "check", style: "margin:-.3rem 0 .8rem" }, onlyMineChk, h("label", { for: "onlyMine", text: `Solo mis clientes (${S().config.commercial.name}: ${S().clients.filter((c) => normalizeText(c.owner) === normalizeText(S().config.commercial.name)).length})` })) : null,
           h("div", { class: "row" }, field("Nombre en el mensaje", nameIn), field("ID cliente / compañía", idOut)),
           contactField,
           h("div", { class: "row" }, h("div", { class: "field" }, h("label", { for: "gphone", text: "Teléfono (WhatsApp)" }), (phoneIn.id = "gphone", phoneIn), (phoneHint.id = "gphone-h", phoneIn.setAttribute("aria-describedby", "gphone-h"), phoneHint), importPhonesBtn), field("Correo", emailOut)),

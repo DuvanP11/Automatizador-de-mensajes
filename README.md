@@ -44,7 +44,8 @@ HTML + CSS + JavaScript (módulos ES) sin framework. [SheetJS](https://sheetjs.c
    - Coincidencias ambiguas o ID distinto con el mismo nombre → decides tú (crear nuevo / es el mismo / ignorar).
    - **Nunca se sobrescribe sin mostrarlo:** los cambios sobre datos existentes aparecen como `valor anterior → nuevo` y vienen **sin marcar**.
    - Puedes descargar un **reporte de errores** en Excel para corregir tu archivo de origen.
-4. **Confirmar importación.** Hasta la sesión actual puedes usar *Deshacer última importación*.
+4. **¿A quién pertenecen?** En el resumen elige el comercial al que se asignan los clientes del archivo (o deja que se use la columna de comercial del Excel). Después, en *Clientes* puedes filtrar por comercial, seleccionar varios y **reasignarlos en bloque**.
+5. **Confirmar importación.** Hasta la sesión actual puedes usar *Deshacer última importación*.
 
 ### 3) Generar un mensaje
 **Generador →** busca el cliente; el teléfono se carga solo (si tiene varios contactos eliges a cuál escribir). Elige zona (**Ninguna** quita toda la frase de zona), revisa el mensaje, edítalo si quieres y **Abrir en WhatsApp**. Opcionalmente registra el contacto en Seguimiento.
