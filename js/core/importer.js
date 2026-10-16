@@ -234,6 +234,28 @@ function simulate(client, changes) {
   }
 }
 
+const STOP = new Set(["sas", "ltda", "s", "a", "de", "del", "la", "el", "y", "e", "los", "las", "cia", "co", "sa", "limitada"]);
+function tokens(v) { return nameKey(v).split(" ").filter((t) => t && !STOP.has(t)); }
+
+/** Clientes con nombre parecido (para sugerir, nunca para fusionar solos). */
+export function similarClients(clients, name, max = 5) {
+  const a = tokens(name);
+  if (!a.length) return [];
+  const aKey = a.join(" ");
+  const scored = [];
+  for (const c of clients) {
+    const b = tokens(c.name);
+    if (!b.length) continue;
+    const bKey = b.join(" ");
+    const common = a.filter((t) => b.includes(t)).length;
+    const jacc = common / (a.length + b.length - common);
+    const contains = aKey.length >= 5 && bKey.length >= 5 && (aKey.includes(bKey) || bKey.includes(aKey));
+    const score = contains ? Math.max(0.8, jacc) : jacc;
+    if (score >= 0.5) scored.push({ c, score });
+  }
+  return scored.sort((x, y) => y.score - x.score).slice(0, max).map((x) => x.c);
+}
+
 function summarize(c) {
   return { uid: c.uid, name: c.name, id: c.id };
 }
@@ -291,7 +313,11 @@ function planRecord(rec, ctx, force) {
         target = hit;
       } else if (kind === "directory" && !force) {
         item.status = "review";
-        item.message = "El cliente no existe en la base. Puedes crearlo o ignorar la fila";
+        const similar = similarClients(work, name);
+        item.candidates = similar.map(summarize);
+        item.message = similar.length
+          ? "No hay un cliente con ese nombre exacto. ¿Es alguno de los parecidos?"
+          : "El cliente no existe en la base. Puedes crearlo o ignorar la fila";
         return item;
       }
     }

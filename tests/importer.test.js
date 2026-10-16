@@ -193,3 +193,14 @@ test("reporte de errores incluye errores, revisiones pendientes y advertencias",
   assert.equal(rows.length, 4);
   assert.equal(rows[1][0], 2);
 });
+
+test("directorio: cliente no encontrado sugiere parecidos sin fusionar solo", () => {
+  const clients = [{ ...base()[0], uid: "cl_a", id: "A1", name: "Ferreplomeria Miguel Murillo SAS" }, { ...base()[0], uid: "cl_b", id: "B1", name: "Beta Total SAS" }];
+  const { recs } = load([["Cliente", "Celular"], ["FERREPLOMERIA MIGUEL MURILLO", "3001112233"], ["Murillo Miguel Ferreplomeria S.A.S.", "3002223344"], ["Zeta Nada", "3003334455"]], "directory");
+  const items = planImport(clients, recs, { kind: "directory" });
+  assert.equal(items[0].status, "review");
+  assert.deepEqual(items[0].candidates.map((c) => c.uid), ["cl_a"]);
+  assert.equal(items[1].candidates[0].uid, "cl_a"); // orden de palabras distinto
+  assert.deepEqual(items[2].candidates, []); // sin parecidos → solo crear/ignorar
+  assert.deepEqual(applyPlan(clients, items).clients[0].contacts.map((c) => c.phone), ["3001112233"]); // el teléfono del archivo NO se aplicó solo
+});

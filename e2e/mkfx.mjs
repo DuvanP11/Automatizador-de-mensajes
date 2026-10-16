@@ -14,4 +14,5 @@ w("clientes_nuevos.xlsx", [["Cliente", "ID cliente", "WhatsApp", "Localidad", "C
   ["Nuevo Cliente Dos SAS", "00790", "3015550002", "Antonio Nariño", "Carlos Peña"],
   ["", "", "3015550003", "", ""]]);
 w("raro.xlsx", [["Foo", "Bar"], ["1", "2"]]);
+w("telefonos_parecidos.xlsx", [["Cliente", "Celular"], ["ADL importaciones", "3112223344"]]);
 console.log("ok");

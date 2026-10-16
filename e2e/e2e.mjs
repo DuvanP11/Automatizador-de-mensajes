@@ -69,10 +69,8 @@ await p.waitForSelector("dialog[open]");
 await clickText("Directorio de teléfonos (relaciona contactos con clientes ya registrados)", "dialog").catch(() => {});
 await p.evaluate(() => (document.querySelector('#r-directory').checked = true, document.querySelector('#r-directory').dispatchEvent(new Event("change", { bubbles: true }))));
 await (await p.$("#impfile")).uploadFile(D + "/fx/directorio.xlsx");
-await p.waitForFunction(() => document.querySelector("dialog[open]")?.textContent.includes("Columnas reconocidas") || document.querySelector("dialog[open]")?.textContent.includes("No pude identificar"), { timeout: 8000 });
-const mapTxt = await p.$eval("dialog[open]", (d) => d.textContent);
-check("Encabezados en fila 2 y variantes (Razón social/CompanyID/Número de contacto) reconocidos", mapTxt.includes("Columnas reconocidas"), mapTxt.slice(0, 200));
-await clickText("Revisar cambios →", "dialog");
+await p.waitForFunction(() => document.querySelector("dialog[open] .kpi") || document.querySelector("dialog[open]")?.textContent.includes("No pude identificar"), { timeout: 8000 });
+check("Columnas con variantes (Razón social/CompanyID/Número de contacto, encabezado en fila 2) reconocidas y el asistente salta directo al resumen", !!(await p.$("dialog[open] .kpi")));
 const kp = await p.$$eval("dialog[open] .kpi", (k) => Object.fromEntries(k.map((x) => [x.querySelector("span").textContent, x.querySelector("b").textContent])));
 check("Resumen distingue categorías (nuevos 0, actualizados 2, contactos 2, errores 1, revisión 1)", kp["Clientes actualizados"] === "2" && kp["Contactos nuevos"] === "2" && kp["Errores"] === "1" && kp["Revisión manual"] === "1" && kp["Clientes nuevos"] === "0", JSON.stringify(kp));
 check("Aviso de fila en revisión manual", (await p.$eval("dialog[open]", (d) => d.textContent)).includes("requieren decisión"));
@@ -97,8 +95,7 @@ check("Fila con teléfono inválido no modificó a Airtempe", s.clients.find((c)
 // ---------- Importar base: ceros iniciales ----------
 await clickText("Agregar o sincronizar clientes", "main", 0); await p.waitForSelector("dialog[open]");
 await (await p.$("#impfile")).uploadFile(D + "/fx/clientes_nuevos.xlsx");
-await p.waitForFunction(() => document.querySelector("dialog[open]")?.textContent.includes("Revisar cambios"), { timeout: 8000 });
-await clickText("Revisar cambios →", "dialog");
+await p.waitForFunction(() => document.querySelector("dialog[open] .kpi"), { timeout: 8000 });
 await clickText("Confirmar importación (2 filas con cambios)", "dialog"); await sleep(300);
 s = await st();
 const n1 = s.clients.find((c) => c.name === "Nuevo Cliente Uno SAS");
@@ -167,7 +164,13 @@ const fu = s.followups[s.clients.find((c) => c.id === "ADL001").uid];
 check("Abrir WhatsApp registra 'primer contacto' en seguimiento", fu?.status === "primer_contacto" && fu.history.length >= 1 && fu.owner === "Juliana Rojas", JSON.stringify(fu));
 // Teléfono inválido bloquea
 await setVal("#gphone", "123");
-check("Teléfono inválido deshabilita 'Abrir en WhatsApp'", await p.$$eval("button", (bs) => bs.find((b) => b.textContent === "Abrir en WhatsApp").disabled));
+await p.evaluate(() => { window.__opened = null; });
+await clickText("Abrir en WhatsApp");
+check("Teléfono inválido: el botón sigue activo, explica el error y NO abre WhatsApp", !(await p.evaluate(() => window.__opened)) && (await p.$$eval(".toast", (t) => t.map((x) => x.textContent))).some((x) => x.includes("Teléfono no válido")));
+await p.evaluate(() => (document.querySelector("#gphone").value = ""));
+await setVal("#gphone", "");
+await clickText("Abrir en WhatsApp");
+check("Sin teléfono: avisa qué falta y ofrece importar teléfonos", (await p.$$eval(".toast", (t) => t.map((x) => x.textContent))).some((x) => x.includes("no tiene teléfono")) && (await p.$$eval("button", (b) => b.some((x) => x.textContent.includes("Importar teléfonos desde Excel") && !x.hidden && x.offsetParent))));
 await setVal("#gphone", "3001234567");
 // Tarifa cambiada
 await go("configuracion"); await fill("Tarifa del servicio", "9800"); await clickText("Guardar configuración");
@@ -227,6 +230,21 @@ await ownerSel.select("");
 const stSel = await p.evaluateHandle(() => [...document.querySelectorAll("label")].find((l) => l.textContent === "Estado").control);
 await stSel.select("primer_contacto"); await sleep(200);
 check("Filtro por estado", (await p.$$eval(".kpi b", (b) => b.map((x) => x.textContent)))[0] === "1");
+
+// ---------- Importar teléfonos (flujo directo) ----------
+await go("clientes");
+check("Aviso de cobertura de teléfonos en Clientes", (await p.$eval("#phoneStat", (e) => e.textContent)).includes("clientes tienen teléfono"));
+await clickText("📞 Importar teléfonos de contacto", "main"); await p.waitForSelector("dialog[open]");
+check("Modo directo explica cómo funciona y ofrece Excel de ejemplo", (await p.$eval("dialog[open]", (d) => d.textContent)).includes("Cómo funciona") && !(await p.$("dialog[open] fieldset")));
+await (await p.$("#impfile")).uploadFile(D + "/fx/telefonos_parecidos.xlsx");
+await p.waitForSelector("dialog[open] .kpi");
+const opts = await p.$$eval('dialog[open] select[aria-label^="Decisión"] option', (o) => o.map((x) => x.textContent));
+check("Nombre casi igual → sugiere el cliente parecido (no lo fusiona solo)", opts.some((o) => o.includes("Es el mismo que: ADL importaciones SAS")), JSON.stringify(opts));
+await p.evaluate(() => { const sel = document.querySelector('dialog[open] select[aria-label^="Decisión"]'); sel.value = [...sel.options].find((o) => o.textContent.includes("Es el mismo que")).value; sel.dispatchEvent(new Event("change", { bubbles: true })); });
+await sleep(150);
+await clickText("Confirmar importación (1 filas con cambios)", "dialog"); await sleep(300);
+s = await st();
+check("Al confirmar, el teléfono queda como contacto del cliente elegido", s.clients.find((c) => c.id === "ADL001").contacts.some((c) => c.phone === "3112223344"));
 
 // ---------- Informes ----------
 await go("informes");
