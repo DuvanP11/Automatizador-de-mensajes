@@ -3,7 +3,9 @@ const subtleEmojis = ["👋", "✨", "💜", "😊", "👍", "💡"];
 const state = {
   clients: [],
   contactsMap: new Map(),
+  contactsMapById: new Map(),
   emailsMap: new Map(),
+  emailsMapById: new Map(),
 };
 
 const searchInput = document.getElementById("searchInput");
@@ -86,19 +88,30 @@ function renderSuggestions(matches) {
 }
 
 function selectClient(client) {
-  clientName.value = client.cliente;
-  clientId.value = client.id;
-  zoneSelect.value = client.localidad;
+  clientName.value = client.cliente || "";
+  clientId.value = client.id || "";
+  zoneSelect.value = client.localidad || "Chapinero";
   handleZoneChange();
-  searchInput.value = client.cliente;
+  searchInput.value = client.cliente || "";
   suggestionsEl.style.display = "none";
 
-  const key = normalizeText(client.cliente);
-  if (state.contactsMap.has(key)) {
-    phoneInput.value = state.contactsMap.get(key);
+  const keyName = normalizeText(client.cliente || "");
+  const keyId = normalizeText(client.id || "");
+
+  if (state.contactsMapById.has(keyId)) {
+    phoneInput.value = state.contactsMapById.get(keyId);
+  } else if (state.contactsMap.has(keyName)) {
+    phoneInput.value = state.contactsMap.get(keyName);
+  } else {
+    phoneInput.value = phoneInput.value || "";
   }
-  if (state.emailsMap.has(key)) {
-    emailInput.value = state.emailsMap.get(key);
+
+  if (state.emailsMapById.has(keyId)) {
+    emailInput.value = state.emailsMapById.get(keyId);
+  } else if (state.emailsMap.has(keyName)) {
+    emailInput.value = state.emailsMap.get(keyName);
+  } else {
+    emailInput.value = emailInput.value || "";
   }
 }
 
@@ -204,11 +217,44 @@ excelContacts.addEventListener("change", async (event) => {
         row.Telefono1 ||
         "";
 
+      const idExcel =
+        row.ID ||
+        row.id ||
+        row.Id ||
+        row["ID Cliente"] ||
+        row["Id Cliente"] ||
+        row.CompanyID ||
+        row["Company ID"] ||
+        row.CODIGO ||
+        row.Código ||
+        row.Codigo ||
+        "";
+
       if (cliente && telefono !== undefined && telefono !== null && telefono !== "") {
         telefono = telefono.toString().trim().replace(/\s+/g, "").replace(/[^0-9]/g, "");
-        state.contactsMap.set(normalizeText(cliente), telefono);
+        const keyCliente = normalizeText(cliente);
+
+        if (keyCliente) {
+          state.contactsMap.set(keyCliente, telefono);
+        }
+
+        if (idExcel) {
+          const keyIdExcel = normalizeText(idExcel);
+          if (keyIdExcel) {
+            state.contactsMapById.set(keyIdExcel, telefono);
+          }
+        }
       }
     });
+
+    if (clientName.value.trim() || clientId.value.trim()) {
+      selectClient({
+        cliente: clientName.value.trim(),
+        id: clientId.value.trim(),
+        localidad: zoneSelect.value,
+      });
+    }
+
     alert("Archivo de contactos cargado correctamente.");
   } catch (error) {
     console.error(error);
@@ -245,12 +291,44 @@ excelEmails.addEventListener("change", async (event) => {
         row["Correo Electrónico"] ||
         row["Correo electrónico"] ||
         row["E-mail"] ||
+        row["E-Mail"] ||
+        "";
+
+      const idExcel =
+        row.ID ||
+        row.id ||
+        row.Id ||
+        row["ID Cliente"] ||
+        row["Id Cliente"] ||
+        row.CompanyID ||
+        row["Company ID"] ||
         "";
 
       if (cliente && correo) {
-        state.emailsMap.set(normalizeText(cliente), correo.toString().trim());
+        const keyCliente = normalizeText(cliente);
+        const correoLimpio = correo.toString().trim();
+
+        if (keyCliente) {
+          state.emailsMap.set(keyCliente, correoLimpio);
+        }
+
+        if (idExcel) {
+          const keyIdExcel = normalizeText(idExcel);
+          if (keyIdExcel) {
+            state.emailsMapById.set(keyIdExcel, correoLimpio);
+          }
+        }
       }
     });
+
+    if (clientName.value.trim() || clientId.value.trim()) {
+      selectClient({
+        cliente: clientName.value.trim(),
+        id: clientId.value.trim(),
+        localidad: zoneSelect.value,
+      });
+    }
+
     alert("Archivo de correos cargado correctamente.");
   } catch (error) {
     console.error(error);
@@ -333,6 +411,10 @@ resetBtn.addEventListener("click", () => {
   suggestionsEl.style.display = "none";
   excelContacts.value = "";
   excelEmails.value = "";
+  state.contactsMap.clear();
+  state.contactsMapById.clear();
+  state.emailsMap.clear();
+  state.emailsMapById.clear();
 });
 
 async function init() {
