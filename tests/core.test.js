@@ -103,9 +103,10 @@ test("WhatsApp: teléfono correcto, sin inventar prefijo cuando no está configu
   assert.equal(validatePhone("300 123 4567", "").ok, false);
   assert.equal(validatePhone("12345", "57").ok, false);
   assert.equal(validatePhone("", "57").ok, false);
-  const url = whatsappUrl("573001234567", "Hola 👋\n*x*");
-  assert.ok(url.startsWith("https://wa.me/573001234567?text=Hola%20%F0%9F%91%8B%0A*x*".slice(0, 36)));
-  assert.equal(decodeURIComponent(url.split("text=")[1]), "Hola 👋\n*x*");
+  const url = whatsappUrl("573001234567", "Hola 👋\n*x* $10.500 COP");
+  assert.ok(url.startsWith("https://api.whatsapp.com/send/?phone=573001234567&text=Hola%20%F0%9F%91%8B%0A"));
+  assert.ok(!url.includes("wa.me")); // wa.me corrompe los emojis
+  assert.equal(decodeURIComponent(url.split("text=")[1].split("&")[0]), "Hola 👋\n*x* $10.500 COP");
 });
 
 test("dinero: formato colombiano y parseo", () => {

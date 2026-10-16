@@ -158,7 +158,7 @@ check("Copiar: contenido igual al mensaje + confirmación", (await p.evaluate(()
 await p.evaluate(() => { window.__opened = null; window.open = (u) => { window.__opened = u; return null; }; });
 await clickText("Abrir en WhatsApp");
 const url = await p.evaluate(() => window.__opened);
-check("WhatsApp: URL con teléfono correcto (57 + número) y mensaje codificado", url?.startsWith("https://wa.me/573001234567?text=") && decodeURIComponent(url.split("text=")[1]) === (await text("#gmsg")), url);
+check("WhatsApp: URL con teléfono correcto (57 + número) y mensaje codificado", url?.startsWith("https://api.whatsapp.com/send/?phone=573001234567&text=") && decodeURIComponent(url.split("text=")[1].split("&")[0]) === (await text("#gmsg")), url);
 s = await st();
 const fu = s.followups[s.clients.find((c) => c.id === "ADL001").uid];
 check("Abrir WhatsApp registra 'primer contacto' en seguimiento", fu?.status === "primer_contacto" && fu.history.length >= 1 && fu.owner === "Juliana Rojas", JSON.stringify(fu));
