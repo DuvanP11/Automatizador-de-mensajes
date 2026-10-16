@@ -275,6 +275,52 @@ check("Fila con solo un número corto/inválido (Bodega Pibox) es error y no cre
 await go("generador"); await p.type("#gsearch", "ADL imp"); await sleep(150); await p.keyboard.press("ArrowDown"); await p.keyboard.press("Enter"); await sleep(250);
 check("Generador ofrece elegir entre los varios números del cliente", (await p.$$eval("select option", (o) => o.filter((x) => x.textContent.includes("3166924463")).length)) === 1);
 
+// ---------- Importación masiva con asignación de comercial ----------
+await go("clientes");
+await clickText("Agregar o sincronizar clientes", "main", 0); await p.waitForSelector("dialog[open]");
+await (await p.$("#impfile")).uploadFile(D + "/fx/clientes_masivos.xlsx");
+await p.waitForSelector("dialog[open] .kpi");
+check("Sin columna de comercial en el archivo, por defecto se propone quien importa (Juliana Rojas)", (await p.$eval('dialog[open] input[list="imp-owners"]', (i) => i.value)) === "Juliana Rojas");
+await p.evaluate(() => { const i = document.querySelector('dialog[open] input[list="imp-owners"]'); i.value = "Equipo Norte"; i.dispatchEvent(new Event("change", { bubbles: true })); }); await sleep(250);
+check("El asistente informa cuántos clientes quedarán a nombre del comercial elegido", (await p.$eval("dialog[open]", (d) => d.textContent)).includes("40 cliente(s) quedarán a nombre de «Equipo Norte»"));
+await p.evaluate(() => [...document.querySelectorAll("dialog[open] button")].find((x) => x.textContent.startsWith("Confirmar importación")).click()); await sleep(400);
+s = await st();
+check("40 clientes creados de forma masiva, todos con el comercial elegido", s.clients.filter((c) => c.id.startsWith("M0")).length === 40 && s.clients.filter((c) => c.owner === "Equipo Norte").length === 40);
+check("Cada cliente masivo trae su teléfono", s.clients.filter((c) => c.owner === "Equipo Norte").every((c) => c.contacts.length === 1));
+// Clientes: filtro y conteo por comercial
+check("Chips de comercial con conteo (Equipo Norte (40))", await p.$$eval("main .tabs button", (b) => b.some((x) => x.textContent === "Equipo Norte (40)")));
+await clickText("Equipo Norte (40)", "main");
+check("Filtrar por comercial deja solo sus clientes", (await p.$eval("main .actions .muted", (e) => e.textContent)).startsWith("40 cliente(s)"));
+// Reasignación en bloque
+await p.click("thead input[type=checkbox]"); await sleep(200);
+check("Seleccionar todos los filtrados (40)", (await p.$eval("main .alert.info strong", (e) => e.textContent)).includes("40 cliente(s) seleccionado(s)"));
+await p.evaluate(() => { const i = document.querySelector('main input[list="bulk-owners"]'); i.value = "Juliana Rojas"; i.dispatchEvent(new Event("input", { bubbles: true })); });
+await clickText("Asignar", "main"); await p.waitForSelector("dialog[open]");
+await clickText("Asignar", "dialog"); await sleep(400);
+s = await st();
+check("Reasignación en bloque: 40 clientes ahora de Juliana Rojas", s.clients.filter((c) => c.id.startsWith("M0") && c.owner === "Juliana Rojas").length === 40);
+// Reasignar uno con seguimiento: el seguimiento acompaña al nuevo dueño
+await p.evaluate(() => { const i = document.querySelector("#cq"); i.value = "ADL imp"; i.dispatchEvent(new Event("input", { bubbles: true })); });
+await clickText("Todos (148)", "main").catch(() => {});
+await p.evaluate(() => { const b = [...document.querySelectorAll("main .tabs button")].find((x) => x.textContent.startsWith("Todos")); b?.click(); }); await sleep(200);
+await p.evaluate(() => document.querySelector('tbody input[type=checkbox]').click()); await sleep(150);
+await p.evaluate(() => { const i = document.querySelector('main input[list="bulk-owners"]'); i.value = "Marta Prueba"; i.dispatchEvent(new Event("input", { bubbles: true })); });
+await clickText("Asignar", "main"); await p.waitForSelector("dialog[open]"); await clickText("Asignar", "dialog"); await sleep(400);
+s = await st();
+const adlC = s.clients.find((c) => c.id === "ADL001");
+check("Reasignar un cliente con seguimiento actualiza también el comercial del seguimiento (con historial)", adlC.owner === "Marta Prueba" && s.followups[adlC.uid].owner === "Marta Prueba" && s.followups[adlC.uid].history.some((e) => e.type === "field" && e.field === "owner" && e.to === "Marta Prueba"));
+// Generador: solo mis clientes
+await go("generador");
+await p.evaluate(() => { document.querySelector("#onlyMine").click(); document.querySelector("#gsearch").value = ""; });
+await p.type("#gsearch", "Masivo Cliente 07"); await sleep(200);
+check("«Solo mis clientes» muestra los de Juliana y la sugerencia indica el comercial", (await p.$$eval("#sugg li", (l) => l.length)) === 1 && (await p.$eval("#sugg li", (l) => l.textContent)).includes("de Juliana Rojas"));
+await p.evaluate(() => { const i = document.querySelector("#gsearch"); i.value = ""; });
+await p.type("#gsearch", "ADL imp"); await sleep(200);
+check("«Solo mis clientes» oculta clientes de otro comercial (ADL es de Marta Prueba)", (await p.$$eval("#sugg li", (l) => l.length)) === 0);
+await p.evaluate(() => document.querySelector("#onlyMine").click()); 
+await p.evaluate(() => { const i = document.querySelector("#gsearch"); i.value = "ADL imp"; i.dispatchEvent(new Event("input", { bubbles: true })); }); await sleep(200);
+check("Sin el filtro vuelve a aparecer", (await p.$$eval("#sugg li", (l) => l.length)) === 1);
+
 // ---------- Informes ----------
 await go("informes");
 const kpis = await p.$$eval(".kpis .kpi", (k) => Object.fromEntries(k.map((x) => [x.querySelector("span").textContent, x.querySelector("b").textContent])));

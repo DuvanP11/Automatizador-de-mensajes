@@ -351,7 +351,7 @@ function planRecord(rec, ctx, force) {
     simulate(client, ch);
     if (client.contacts.length) client.contacts[0].primary = true;
     item.status = "new";
-    item.newClient = client;
+    item.newClient = deepClone(client); // instantánea: las filas siguientes siguen modificando la copia de trabajo
     item.clientUid = client.uid;
     item.clientName = client.name;
     item.message = "Cliente nuevo";
@@ -455,6 +455,36 @@ export function applyPlan(clients, items, now = new Date().toISOString()) {
     if (touched) { c.updatedAt = now; stats.updated++; }
   }
   return { clients: out, stats };
+}
+
+/**
+ * Asigna un comercial a todas las filas aplicables del plan (sin mutar el plan original).
+ * - Clientes nuevos: se crean con ese comercial.
+ * - Existentes sin comercial: se les asigna (aplicado por defecto).
+ * - Existentes con OTRO comercial: se muestra el cambio `anterior → nuevo`; solo se aplica si overwrite=true.
+ * Las filas con error, en revisión o ignoradas no se tocan.
+ */
+export function assignOwner(clients, items, owner, { overwrite = false } = {}) {
+  const name = String(owner ?? "").trim();
+  if (!name) return items;
+  const cur = new Map(clients.map((c) => [c.uid, c.owner || ""]));
+  for (const it of items) if (it.newClient) cur.set(it.newClient.uid, it.newClient.owner || "");
+  return items.map((it) => {
+    if (it.resolution?.type === "skip" || it.status === "error" || it.status === "review") return it;
+    if (it.status === "new" && it.newClient) {
+      cur.set(it.newClient.uid, name);
+      return { ...it, newClient: { ...it.newClient, owner: name } };
+    }
+    if (!it.clientUid) return it;
+    const old = cur.get(it.clientUid) ?? "";
+    const changes = it.changes.filter((ch) => !(ch.kind === "field" && ch.field === "owner"));
+    if (old !== name) {
+      changes.push({ kind: "field", field: "owner", old, new: name, apply: !old || overwrite });
+      if (!old || overwrite) cur.set(it.clientUid, name);
+    }
+    if (!changes.length) return { ...it, changes };
+    return { ...it, changes, status: "update", message: it.status === "duplicate" ? "Actualiza el comercial asignado" : it.message };
+  });
 }
 
 const STATUS_LABEL = { new: "Nuevo", update: "Actualizado", duplicate: "Duplicado", error: "Error", review: "Requiere revisión" };
