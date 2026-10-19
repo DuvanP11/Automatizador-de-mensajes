@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.0 — Personalización, ayuda integrada, tutorial y buzón de ideas
+- **Apariencia (nueva sección):** modo claro/oscuro/automático, 6 paletas, paleta **personalizada** con 10 colores (fondos, tarjetas, texto, bordes, botones, avisos…), tamaño de letra y esquinas. Los tonos derivados (hover, fondos de alertas, texto sobre cada color) se calculan solos y se avisa si una combinación queda ilegible. «Restablecer apariencia» vuelve al diseño original. Se guarda por navegador y se aplica antes de pintar.
+- **Ayudas flotantes:** globo explicativo en cada opción del menú y en los botones clave de cada pantalla (mouse y teclado; Esc lo cierra) y botón «?» con «cómo se usa / cómo ajustarlo» por sección. Se pueden desactivar en Apariencia.
+- **Tutorial (nueva sección):** 9 pasos con enlace a cada sección y «Recorrido guiado» que señala el menú.
+- **Buzón de ideas (nueva sección):** guardar sugerencias, enviarlas por correo o descargarlas en Excel. Nuevo campo «Correo para recibir las ideas» en Configuración. Las ideas viajan en el respaldo JSON.
+- **Menú contraíble:** botón para contraer/expandir el menú lateral (solo íconos); se recuerda entre visitas.
+- Los colores fijos de la interfaz (texto sobre botones, avisos, vista previa de WhatsApp, notificaciones) ahora salen del tema, así que cambian con la paleta.
+- 10 pruebas unitarias nuevas (colores/contraste, buzón, persistencia) y 64 pruebas de navegador (`e2e/ui.mjs`).
+
 ## 2.1.1 — Logo de Pibox comercial
 - El logo de la barra lateral, el favicon de la pestaña y los íconos de la app (192/512 px) ahora son el logo circular de Pibox comercial, en reemplazo del que se había creado de forma provisional.
 
