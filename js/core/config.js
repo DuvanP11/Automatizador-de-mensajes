@@ -47,6 +47,7 @@ export const DEFAULT_CONFIG = {
   zones: [...DEFAULT_ZONES],
   statuses: DEFAULT_STATUSES.map((s) => ({ ...s })),
   commercials: [],
+  ideasEmail: "",
   emojis: { enabled: true, recent: [], favorites: [] },
 };
 

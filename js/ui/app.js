@@ -6,6 +6,12 @@ import { renderTemplates } from "./templates.js";
 import { renderFollowup } from "./followup.js";
 import { renderReports } from "./reports.js";
 import { renderSettings } from "./settings.js";
+import { renderAppearance } from "./appearance.js";
+import { renderTutorial } from "./tutorial.js";
+import { renderIdeas } from "./ideas.js";
+import { HELP } from "../core/help.js";
+import { initPrefs, getPrefs, updatePrefs, subscribePrefs } from "./prefs.js";
+import { initTips, applyControlTips, mountHelpButton, setHelpSection, closeHelp } from "./tips.js";
 
 const ROUTES = [
   { path: "generador", label: "Generador de mensajes", ico: "✉", render: renderGenerator },
@@ -14,6 +20,9 @@ const ROUTES = [
   { path: "seguimiento", label: "Seguimiento comercial", ico: "📌", render: renderFollowup },
   { path: "informes", label: "Informes gerenciales", ico: "📊", render: renderReports },
   { path: "configuracion", label: "Configuración", ico: "⚙", render: renderSettings },
+  { path: "apariencia", label: "Apariencia", ico: "🎨", render: renderAppearance },
+  { path: "tutorial", label: "Tutorial", ico: "🎓", render: renderTutorial },
+  { path: "ideas", label: "Buzón de ideas", ico: "💡", render: renderIdeas },
 ];
 
 const store = createStore();
@@ -26,8 +35,21 @@ let currentPath = null;
 let reverting = false;
 
 function drawNav(active) {
-  nav.replaceChildren(...ROUTES.map((r) => h("a", { href: `#/${r.path}`, "aria-current": r.path === active ? "page" : null }, h("span", { class: "ico", "aria-hidden": "true", text: r.ico }), r.label)));
+  nav.replaceChildren(...ROUTES.map((r) => h("a", { href: `#/${r.path}`, "aria-current": r.path === active ? "page" : null, "data-tip-title": r.label, "data-tip": HELP[r.path]?.short, "data-tip-pos": "right" },
+    h("span", { class: "ico", "aria-hidden": "true", text: r.ico }), h("span", { class: "nav-label", text: r.label }))));
 }
+
+// Botón para contraer/expandir el menú lateral (se recuerda entre visitas).
+const navToggle = document.getElementById("navToggle");
+function drawToggle() {
+  const collapsed = getPrefs().collapsed;
+  navToggle.setAttribute("aria-expanded", String(!collapsed));
+  navToggle.setAttribute("aria-label", collapsed ? "Expandir el menú" : "Contraer el menú");
+  navToggle.setAttribute("data-tip", collapsed ? "Expandir el menú" : "Contraer el menú para tener más espacio");
+  navToggle.textContent = collapsed ? "»" : "«";
+}
+navToggle.addEventListener("click", () => { updatePrefs({ collapsed: !getPrefs().collapsed }); });
+subscribePrefs(drawToggle);
 
 function drawFoot() {
   const foot = document.getElementById("sideFoot");
@@ -51,6 +73,8 @@ async function route() {
   currentPath = r.path;
   document.title = `${r.label} · Automatizador de Mensajes Pibox`;
   drawNav(r.path);
+  setHelpSection(r.path, r.label);
+  closeHelp();
   main.replaceChildren();
   try {
     r.render(main, ctx);
@@ -58,11 +82,16 @@ async function route() {
     console.error(e);
     main.replaceChildren(h("div", { class: "alert err", text: "Ocurrió un error al mostrar esta sección. Recarga la página; tus datos guardados no se han modificado." }));
   }
+  applyControlTips(main, r.path);
   drawFoot();
   main.focus({ preventScroll: true });
 }
 
 async function init() {
+  initPrefs();
+  drawToggle();
+  initTips();
+  mountHelpButton((p) => ctx.navigate(p));
   store.load();
   if (store.persistError) toast(store.persistError, "err", 6000);
   if (!store.state.seeded) {

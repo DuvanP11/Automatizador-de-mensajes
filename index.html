@@ -11,6 +11,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
   <link rel="manifest" href="assets/site.webmanifest">
+  <script src="js/boot.js"></script>
   <link rel="stylesheet" href="css/styles.css">
   <script src="vendor/xlsx.full.min.js"></script>
 </head>
@@ -18,10 +19,13 @@
   <a class="skip" href="#main">Saltar al contenido</a>
   <div class="shell">
     <aside class="sidebar">
-      <a class="brand" href="#/generador" aria-label="Automatizador de Mensajes Pibox, ir al inicio">
-        <img src="assets/logo-icon.png" alt="" width="38" height="38">
-        <span>Automatizador<small>de Mensajes · Pibox</small></span>
-      </a>
+      <div class="side-top">
+        <a class="brand" href="#/generador" aria-label="Automatizador de Mensajes Pibox, ir al inicio">
+          <img src="assets/logo-icon.png" alt="" width="38" height="38">
+          <span class="brand-text">Automatizador<small>de Mensajes · Pibox</small></span>
+        </a>
+        <button class="nav-toggle" id="navToggle" type="button" aria-controls="nav" aria-expanded="true" aria-label="Contraer el menú" data-tip-pos="right">«</button>
+      </div>
       <nav class="nav" id="nav" aria-label="Secciones"></nav>
       <div class="side-foot" id="sideFoot"></div>
     </aside>

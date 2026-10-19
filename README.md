@@ -13,7 +13,12 @@ Herramienta comercial interna para preparar mensajes de WhatsApp personalizados,
 | **Plantillas** | Crear, editar, duplicar, renombrar, eliminar (con confirmación) y marcar como predeterminada. Variables, bloques opcionales, emojis y vista previa. |
 | **Seguimiento comercial** | Estado por cliente, fechas de último contacto y próximo seguimiento, comercial responsable, notas con historial, filtros y alertas de vencidos. |
 | **Informes gerenciales** | Indicadores calculados con datos reales, filtros y descarga de Excel (4 hojas). |
-| **Configuración** | Nombre/cargo del comercial, oferta (modelo, tarifa, franja…), saludo, zonas, indicativo de país, estados de seguimiento, respaldo y restauración. |
+| **Configuración** | Nombre/cargo del comercial, oferta (modelo, tarifa, franja…), saludo, zonas, indicativo de país, estados de seguimiento, correo del buzón de ideas, respaldo y restauración. |
+| **Apariencia** | Modo claro/oscuro/automático, 6 paletas listas o una **personalizada** (10 colores; todo lo demás se deriva) con aviso de legibilidad, tamaño de letra, forma de esquinas y activar/desactivar las ayudas flotantes. Se guarda por navegador y se aplica antes de pintar (sin destello). |
+| **Tutorial** | Guía paso a paso y **recorrido guiado** que señala cada opción del menú. |
+| **Buzón de ideas** | Cada persona anota mejoras (título, detalle, sección, importancia). Quedan en el navegador; se envían por correo (`mailto:`, al destinatario de Configuración) o se descargan en Excel. |
+
+**Ayuda integrada:** el menú muestra un globo con la explicación de cada opción (también con el menú contraído y con teclado), los botones clave traen ayudas al pasar el mouse y el botón **«?»** (abajo a la derecha) explica cómo se usa y cómo se ajusta la sección actual. Todo el texto de ayuda está en `js/core/help.js`. El menú lateral se contrae/expande con el botón **«** y se recuerda.
 
 ## Cómo ejecutarla
 
@@ -77,7 +82,7 @@ Todo vive en el **`localStorage` de este navegador**: un solo usuario, un solo e
 
 ## Pruebas
 ```bash
-npm test                                  # 43 pruebas unitarias (importador, plantillas, seguimiento, informe, persistencia)
+npm test                                  # 58 pruebas unitarias (importador, plantillas, seguimiento, informe, persistencia)
 npm i --no-save puppeteer-core            # una sola vez
 npm start &                               # o: python3 -m http.server 8791
 E2E_URL=http://127.0.0.1:8791/index.html node e2e/e2e.mjs   # 72 comprobaciones en Chrome real

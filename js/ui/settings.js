@@ -2,6 +2,7 @@ import { h, field, select, toast, confirmDialog, download, openDialog } from "./
 import { STAGES } from "../core/config.js";
 import { formatMoney, deepClone, uid } from "../core/util.js";
 import { greetingFor } from "../core/templates.js";
+import { isValidEmail } from "../core/util.js";
 
 const ROLES = ["Gestor comercial", "Account Manager", "Ejecutivo comercial", "Asesor comercial"];
 
@@ -59,11 +60,12 @@ export function renderSettings(root, ctx) {
     if (cfg.statuses.some((s) => !s.label.trim())) problems.push("Todos los estados necesitan un nombre.");
     if (new Set(cfg.statuses.map((s) => s.label.trim().toLowerCase())).size !== cfg.statuses.length) problems.push("Hay estados con el mismo nombre.");
     if (!cfg.statuses.some((s) => s.active && s.stage === "pending")) problems.push("Debe haber al menos un estado activo de la categoría «Sin contactar».");
+    if ((cfg.ideasEmail || "").trim() && !isValidEmail(cfg.ideasEmail.trim())) problems.push("El correo para recibir las ideas no es válido.");
     if (cfg.defaultCountryCode && !/^\d{1,4}$/.test(cfg.defaultCountryCode.trim())) problems.push("El indicativo de país debe tener solo dígitos (ej: 57) o quedar vacío.");
     errBox.replaceChildren(problems.length ? h("div", { class: "alert err" }, h("ul", {}, problems.map((p) => h("li", { text: p })))) : "");
     if (problems.length) return;
     cfg.offer.rate = rate; cfg.defaultCountryCode = (cfg.defaultCountryCode || "").trim();
-    cfg.commercial.name = cfg.commercial.name.trim();
+    cfg.commercial.name = cfg.commercial.name.trim(); cfg.ideasEmail = (cfg.ideasEmail || "").trim();
     store.commit((d) => { d.config = deepClone(cfg); });
     cfg = deepClone(S().config); rateText = String(cfg.offer.rate); rateIn.value = rateText; mark();
     toast("Configuración guardada ✓");
@@ -111,6 +113,7 @@ export function renderSettings(root, ctx) {
       field("Zonas disponibles (una por línea)", zonesTa, "En el generador siempre existen además «Ninguna» y «Otra»."),
       text("Indicativo de país para números de 10 dígitos", cfg, "defaultCountryCode", { maxlength: 4, placeholder: "57" }, "Solo se usa al abrir WhatsApp; el número guardado no se modifica. Déjalo vacío para exigir el número completo."),
       field("Comercial(es) del equipo (uno por línea)", comTa, "Aparecen en los filtros y asignaciones. No es un sistema de usuarios: la aplicación no tiene inicio de sesión."),
+      text("Correo para recibir las ideas del buzón", cfg, "ideasEmail", { type: "email", placeholder: "correo@empresa.com" }, "Opcional. Al pulsar «Enviar por correo» en el Buzón de ideas se abre tu correo con este destinatario ya escrito."),
       h("div", { class: "check" }, h("input", { type: "checkbox", id: "emon", checked: cfg.emojis.enabled, onchange: (e) => { cfg.emojis.enabled = e.target.checked; mark(); } }), h("label", { for: "emon", text: "Usar emojis en los mensajes generados" }))),
     h("section", { class: "card" }, h("h2", { text: "Estados de seguimiento" }), statusHost),
     h("section", { class: "card" }, h("h2", { text: "Datos y respaldo" }),
