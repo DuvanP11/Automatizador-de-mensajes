@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.1.1 — Logo de Pibox comercial
+- El logo de la barra lateral, el favicon de la pestaña y los íconos de la app (192/512 px) ahora son el logo circular de Pibox comercial, en reemplazo del que se había creado de forma provisional.
+
 ## 2.1.0 — Asignación de clientes a un comercial
 - **Importación:** nuevo bloque «¿A quién pertenecen estos clientes?» en el asistente. Asigna todos los clientes del archivo a un comercial (por defecto, quien importa si el archivo no trae columna de comercial). Los clientes que ya tienen otro comercial no se tocan salvo que marques «También reasignar…».
 - **Clientes:** filtro por comercial con conteo (incluye «Sin comercial»), columna de comercial visible, selección múltiple y reasignación en bloque. Al reasignar, el seguimiento existente del cliente pasa al nuevo comercial y queda en su historial.
