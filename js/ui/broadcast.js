@@ -272,6 +272,7 @@ export function renderBroadcast(root, ctx) {
       h("section", { class: "card", "aria-labelledby": "h-c3" },
         h("h2", { id: "h-c3", text: "3 · Ritmo de envío" }),
         h("div", { class: "row" }, paceIn("minDelay", "Pausa mínima (segundos)", 10), paceIn("maxDelay", "Pausa máxima (segundos)", 10), paceIn("dailyCap", "Máximo de envíos por día (en total)", 1, "Es la suma de todos los clientes, no por cliente: cada cliente recibe el comunicado una sola vez. Si hay más clientes que el tope, el resto queda pendiente para el día siguiente. Cuentas nuevas: 20–30.")),
+        h("div", { class: "check", style: "margin:.4rem 0" }, h("input", { id: "bcBlock", type: "checkbox", checked: v.pace.block !== false, onchange: (e) => { v.pace.block = e.target.checked; } }), h("label", { for: "bcBlock", text: "Bloquear «Abrir WhatsApp» durante la pausa (recomendado)" })),
         guideBox,
         h("p", { class: "hint", text: "Entre un cliente y otro la herramienta espera un tiempo al azar dentro de ese rango antes de dejarte abrir el siguiente chat." }),
         h("div", { class: "actions" }, h("button", { class: "btn btn-primary", type: "button", text: "Preparar envío", onclick: prepare }))),
@@ -292,12 +293,17 @@ export function renderBroadcast(root, ctx) {
 
     function paint() {
       const run = get(), p = runProgress(run), cur = currentItem(run), cap = run.pace.dailyCap, today = sentTodayCount(run);
+      const label = (w) => (!w ? "Abrir WhatsApp" : blocking(run) ? `Espera ${w} s…` : `Abrir WhatsApp (pausa sugerida: ${w} s)`);
       const capHit = today >= cap, wait = Math.max(0, Math.ceil((run.nextAt - Date.now()) / 1000));
       host.replaceChildren(
         h("section", { class: "card" },
           h("div", { class: "panel-title" }, h("h2", { text: run.name }), h("span", { class: "badge", text: `${p.sent} enviados · ${p.skipped} omitidos · ${p.pending} pendientes` })),
           h("progress", { max: p.total, value: p.sent + p.skipped, style: "width:100%", "aria-label": "Avance del envío" }),
           h("p", { class: "hint", text: `Hoy: ${today} de ${cap} permitidos.` }),
+          h("div", { class: "check", style: "margin:.2rem 0 .4rem" }, h("input", { id: "bcBlockRun", type: "checkbox", checked: blocking(run), onchange: async (e) => {
+            if (!e.target.checked && !(await confirmDialog({ title: "Quitar el bloqueo de la pausa", message: "Podrás abrir el siguiente chat de inmediato. Ojo: a mano, cada cliente toma unos 15 a 30 segundos, así que 100 clientes saldrían en menos de una hora. Esa ráfaga es justo lo que más expone la línea a ser marcada como spam. El tope diario sigue activo.", confirmText: "Quitar el bloqueo", danger: true }))) { e.target.checked = true; return; }
+            mut((r) => { r.pace.block = e.target.checked; }); paint();
+          } }), h("label", { for: "bcBlockRun", text: "Bloquear «Abrir WhatsApp» durante la pausa (recomendado)" })),
           p.pending ? h("div", { class: "actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Regenerar textos pendientes", title: "Vuelve a sortear la redacción de los clientes que faltan, usando el comunicado guardado (con sus frases intercambiables).", onclick: regenTexts })) : null),
         !cur ? h("div", { class: "alert ok", text: "Terminaste la cola. Todos los clientes fueron enviados u omitidos." })
           : capHit ? h("div", { class: "alert warn", text: `Llegaste al tope de ${cap} envíos de hoy. Continúa mañana desde «Envíos preparados»: lo pendiente se conserva.` })
@@ -311,7 +317,7 @@ export function renderBroadcast(root, ctx) {
               h("button", { class: "btn btn-ghost", type: "button", text: `Descargar ${blob.type.startsWith("image/") ? "imagen" : "video"}`, onclick: () => download(blob, run.media.name, blob.type) }),
               canShareFile(new File([blob], run.media.name, { type: blob.type })) ? h("button", { class: "btn btn-ghost", type: "button", text: "Compartir…", onclick: () => navigator.share({ files: [new File([blob], run.media.name, { type: blob.type })], text: cur.text }).catch(() => {}) }) : null) : null,
             h("div", { class: "actions" },
-              h("button", { class: "btn btn-primary", type: "button", id: "bcOpen", text: wait ? `Espera ${wait} s…` : "Abrir WhatsApp", disabled: wait > 0, onclick: () => openChat(cur.waNumber, cur.text) }),
+              h("button", { class: "btn btn-primary", type: "button", id: "bcOpen", text: label(wait), disabled: wait > 0 && blocking(run), onclick: () => openChat(cur.waNumber, cur.text) }),
               h("button", { class: "btn btn-secondary", type: "button", text: "✓ Ya lo envié", onclick: () => markSent(cur) }),
               h("button", { class: "btn btn-ghost", type: "button", text: "Omitir", onclick: () => { mut((r) => { r.items.find((i) => i.uid === cur.uid).status = "skipped"; }); paint(); } })),
             blob ? h("p", { class: "hint", text: "Pasos: 1) «Abrir WhatsApp»; 2) pega la imagen con Ctrl+V (o adjunta el video con el clip 📎) en esa conversación; 3) envía; 4) vuelve aquí y pulsa «Ya lo envié». Prueba primero con un cliente tuyo para ver cómo queda el texto junto al archivo." }) : h("p", { class: "hint", text: "Pasos: «Abrir WhatsApp», envía el mensaje y vuelve a pulsar «Ya lo envié»." }),
@@ -323,6 +329,7 @@ export function renderBroadcast(root, ctx) {
           h("div", { class: "actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Exportar resultado (CSV)", onclick: () => exportCsv(run) }))));
     }
 
+    const blocking = (run) => run.pace.block !== false;
     const isImage = () => !!blob && blob.type.startsWith("image/");
     const mediaWord = () => (isImage() ? "la imagen" : "el video");
     /** Con imagen, se copia al portapapeles ANTES de abrir el chat (el navegador solo deja copiar mientras esta pestaña tiene el foco). */
@@ -404,7 +411,7 @@ export function renderBroadcast(root, ctx) {
       const open = host.querySelector("#bcOpen"), run = get();
       if (!open || !run) return;
       const wait = Math.max(0, Math.ceil((run.nextAt - Date.now()) / 1000));
-      open.disabled = wait > 0; open.textContent = wait ? `Espera ${wait} s…` : "Abrir WhatsApp";
+      open.disabled = wait > 0 && run.pace.block !== false; open.textContent = !wait ? "Abrir WhatsApp" : run.pace.block !== false ? `Espera ${wait} s…` : `Abrir WhatsApp (pausa sugerida: ${wait} s)`;
     }, 500);
   }
 

@@ -76,7 +76,7 @@ test("normalizeState conserva comunicados y colas, y descarta basura", () => {
 });
 
 test("sanitizePace: vacío, 0 o negativo vuelven al valor por defecto y max nunca queda bajo min", () => {
-  assert.deepEqual(sanitizePace({ minDelay: "", maxDelay: 0, dailyCap: "" }), { minDelay: 45, maxDelay: 120, dailyCap: 40 });
+  assert.deepEqual(sanitizePace({ minDelay: "", maxDelay: 0, dailyCap: "" }), { minDelay: 45, maxDelay: 120, dailyCap: 40, block: true });
   assert.equal(sanitizePace({ dailyCap: 0 }).dailyCap, 40);
   assert.equal(sanitizePace({ dailyCap: 229 }).dailyCap, 229);
   assert.equal(sanitizePace({ minDelay: 90, maxDelay: 30 }).maxDelay, 90);
@@ -139,4 +139,10 @@ test("variación automática: sin [[ ]] escritos, igual salen textos distintos y
   assert.equal(new Set(off.items.map((i) => i.text)).size, 1);
   on.items.forEach((i) => { assert.match(i.text, /31 de octubre/); assert.match(i.text, /Ana/); assert.ok(!i.text.includes("[[") && !i.text.includes("{{")); });
   assert.equal(effectiveBodies([{ body: " " }, { body }], false).length, 1);
+});
+
+test("sanitizePace conserva la opción de bloqueo (activa por defecto)", () => {
+  assert.equal(sanitizePace({}).block, true);
+  assert.equal(sanitizePace({ block: false }).block, false);
+  assert.equal(sanitizePace({ block: "" }).block, true);
 });
