@@ -38,19 +38,35 @@ check("La imagen se guardó en IndexedDB", await p.evaluate(() => new Promise((r
 await p.evaluate(() => { document.querySelector("#bcPhone").click(); }); await sleep(100); // quita "solo con teléfono" para ver el total
 await p.evaluate(() => { document.querySelector("#bcPhone").click(); }); await sleep(100);
 await p.type('main input[type=search]', ""); // asegura foco sin filtrar
-const withPhone = await p.$$eval("main tbody tr", (r) => r.length);
+const withPhone = await p.$$eval("main .table-wrap[style*='max-height'] tbody tr", (r) => r.length);
 check("La tabla solo muestra clientes con teléfono válido", withPhone === 4, withPhone);
 await p.evaluate(() => document.querySelector('thead input[type=checkbox]').click()); await sleep(150);
 check("«Seleccionar todos» marca los visibles", await p.evaluate(() => window.__pibox.bc.selected.size === 4));
 await p.evaluate(() => [...document.querySelectorAll("th button")].find((x) => x.textContent.startsWith("Cliente")).click()); await sleep(150);
-const az = await p.$$eval("main tbody tr td:nth-child(2)", (t) => t.map((x) => x.textContent.replace("Repetido", "")));
+const az = await p.$$eval("main .table-wrap[style*='max-height'] tbody tr td:nth-child(2)", (t) => t.map((x) => x.textContent.replace("Repetido", "")));
 check("Un clic en «Cliente» invierte a Z→A", az.every((x, i) => !i || az[i - 1].localeCompare(x, "es", { sensitivity: "base" }) >= 0), az.join("|"));
+check("La guía de ritmo explica los 3 campos y calcula con los marcados", await p.evaluate(() => { const g = document.querySelector("details.ritmo"); return !!g && g.querySelectorAll("dt").length === 3 && g.querySelectorAll("tbody tr").length === 4 && /4 cliente\(s\) marcados/.test(g.textContent); }));
+await p.evaluate(() => document.querySelector("#mAdd").closest("details").open = true);
+const mInputs = await p.$$("details.guide input[type=text], details.guide input[type=tel]");
+await mInputs[0].type("Cliente Manual SAS"); await mInputs[1].type("3105550123");
+await p.evaluate(() => document.querySelector("#mAdd").click()); await sleep(400);
+const man = await p.evaluate(() => { const c = window.__pibox.store.state.clients.find((x) => x.name === "Cliente Manual SAS"); return { ok: !!c && c.contacts[0].phone === "3105550123", sel: !!c && window.__pibox.bc.manual.has(c.uid) && window.__pibox.bc.selected.size === 4 }; });
+check("Agregar a mano crea el cliente y lo suma a los agregados a mano", man.ok && man.sel, JSON.stringify(man));
+await p.evaluate(() => { const d = document.querySelector("#mAddBulk").closest("details"); d.open = true; const t = d.querySelector("textarea"); t.value = "Pegado Uno, 3115550001\nPegado Dos;3115550002\nMalo, 12"; document.querySelector("#mAddBulk").click(); }); await sleep(400);
+const bulk = await p.evaluate(() => ({ n: window.__pibox.store.state.clients.filter((x) => x.name.startsWith("Pegado")).length, sel: window.__pibox.bc.manual.size }));
+check("Pegar varios agrega los válidos y rechaza el inválido", bulk.n === 2 && bulk.sel === 3, JSON.stringify(bulk));
+await p.evaluate(() => document.querySelector("#bcInclTable").click()); await sleep(150);
+const only = await p.evaluate(() => /Se enviará a: 3/.test(document.querySelector("main").textContent));
+await p.evaluate(() => document.querySelector("#bcInclTable").click()); await sleep(150);
+const both = await p.evaluate(() => /Se enviará a: 7/.test(document.querySelector("main").textContent));
+check("El check alterna entre «solo a mano» (3) y «junto con la tabla» (7)", only && both, `${only} ${both}`);
+check("No aparece la palabra «null» en la página", await p.evaluate(() => !document.querySelector("main").textContent.includes("null")));
 await p.evaluate(() => { window.__opened = []; window.open = (u) => { window.__opened.push(u); return null; }; });
 await p.evaluate(() => { [...document.querySelectorAll("button")].find((x) => x.textContent === "Preparar envío").click(); }); await sleep(300);
 check("Se pide confirmar y avisa de omitidos", await p.evaluate(() => /Se omiten 1/.test(document.querySelector("dialog")?.textContent || "")));
 await clickText("Preparar cola"); await sleep(300);
 const run = await p.evaluate(() => window.__pibox.store.state.runs[0]);
-check("La cola tiene 3 destinatarios únicos", run?.items.length === 3, JSON.stringify(run?.items.map((i) => i.waNumber)));
+check("La cola tiene los destinatarios únicos (3 de la tabla + 3 a mano)", run?.items.length === 6, JSON.stringify(run?.items.map((i) => i.waNumber)));
 check("Las redacciones se alternan", run.items.every((it, i) => !i || it.variant !== run.items[i - 1].variant));
 check("Muestra el botón de copiar imagen", await p.evaluate(() => [...document.querySelectorAll("button")].some((x) => x.textContent === "Copiar imagen")));
 await clickText("Abrir WhatsApp");

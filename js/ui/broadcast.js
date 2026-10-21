@@ -3,7 +3,7 @@ import { openImport } from "./clients.js";
 import { VARIABLES, whatsappUrl, buildValues, renderTemplate } from "../core/templates.js";
 import { normalizeText, nameKey, uid, validatePhone, todayBogota } from "../core/util.js";
 import { newFollowup, updateFollowup, stageOf } from "../core/followup.js";
-import { MAX_VARIANTS, DEFAULT_PACE, sanitizePace, newBroadcast, validateMedia, planRecipients, buildRunItems, newRun, nextDelaySeconds, sentTodayCount, runProgress, currentItem } from "../core/broadcast.js";
+import { MAX_VARIANTS, DEFAULT_PACE, sanitizePace, parseManualLines, addManualClients, estimateRun, riskForDaily, SAME_DAY_GUIDE, newBroadcast, validateMedia, planRecipients, buildRunItems, newRun, nextDelaySeconds, sentTodayCount, runProgress, currentItem } from "../core/broadcast.js";
 import { putMedia, getMedia, deleteMedia, copyImageToClipboard, canShareFile } from "./media-db.js";
 
 const SAMPLE = [["{{saludo}} {{nombre_cliente}} 👋", "Te compartimos un comunicado importante de Pibox."], ["[[Hola|Buen día|Qué tal]] {{nombre_cliente}}", "Queremos contarte una novedad de Pibox."]];
@@ -11,9 +11,11 @@ const SAMPLE = [["{{saludo}} {{nombre_cliente}} 👋", "Te compartimos un comuni
 export function renderBroadcast(root, ctx) {
   const { store } = ctx;
   const S = () => store.state;
-  const v = (ctx.bc ||= { broadcastId: "", runId: "", selected: new Set(), query: "", owner: "", zone: "", onlyPhone: true, sortKey: "name", sortDir: 1, pace: { ...DEFAULT_PACE }, skipNotInterested: true });
+  const v = (ctx.bc ||= { broadcastId: "", runId: "", selected: new Set(), manual: new Set(), includeTable: true, query: "", owner: "", zone: "", onlyPhone: true, sortKey: "name", sortDir: 1, pace: { ...DEFAULT_PACE }, skipNotInterested: true });
   let draft = null, mediaFile = null, previewUrl = "", timer = null;
 
+  /** A quién se enviará: los agregados a mano y, si el check está activo, también los marcados en la tabla. */
+  const recipientUids = () => [...new Set([...v.manual, ...(v.includeTable ? v.selected : [])])];
   const stop = () => { clearInterval(timer); timer = null; if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = ""; } };
   const draw = () => { stop(); root.replaceChildren(); v.runId && S().runs.some((r) => r.id === v.runId) ? drawRun() : drawSetup(); };
 
@@ -58,13 +60,13 @@ export function renderBroadcast(root, ctx) {
 
     // Vista previa: cómo le llegaría a un cliente (el primero marcado; si no hay, el primero de la base), una burbuja por redacción.
     function drawPreview() {
-      const sample = clients.find((c) => v.selected.has(c.uid)) || clients.find(hasPhone) || clients[0];
+      const sample = clients.find((c) => recipientUids().includes(c.uid)) || clients.find(hasPhone) || clients[0];
       const contact = sample?.contacts.find((ct) => ct.primary) || sample?.contacts[0];
       const values = buildValues({ config: S().config, client: { name: sample?.name || "Nombre del cliente", id: sample?.id || "" }, contact: { name: contact?.name || "" }, zone: sample?.zone || "" });
       const bodies = draft.variants.filter((x) => x.body.trim());
       previewBox.replaceChildren(
         h("h2", { id: "h-pv", text: "Así se verá el mensaje" }),
-        h("p", { class: "hint", text: sample ? `Con los datos de «${sample.name}»${v.selected.has(sample?.uid) ? "" : " (ejemplo; al marcar clientes se usa el primero marcado)"}. Cada cliente recibe una de estas redacciones, alternadas.` : "Escribe una redacción para verla aquí." }),
+        h("p", { class: "hint", text: sample ? `Con los datos de «${sample.name}»${recipientUids().includes(sample?.uid) ? "" : " (ejemplo; al marcar clientes se usa el primero marcado)"}. Cada cliente recibe una de estas redacciones, alternadas.` : "Escribe una redacción para verla aquí." }),
         !bodies.length ? h("div", { class: "empty" }, "Todavía no hay texto que mostrar.") : h("div", { class: "pv-grid" }, bodies.map((x) => {
           const i = draft.variants.indexOf(x);
           const out = renderTemplate(x.body, values, { seed: i, emojis: S().config.emojis.enabled });
@@ -108,7 +110,13 @@ export function renderBroadcast(root, ctx) {
     const owners = [...new Set(clients.map((c) => c.owner).filter(Boolean))].sort();
     const zones = [...new Set(clients.map((c) => c.zone).filter(Boolean))].sort();
     const tableHost = h("div", { class: "table-wrap", style: "max-height:380px;overflow:auto" });
-    const countOut = h("strong");
+    const countOut = h("strong"), manualOut = h("strong"), totalOut = h("strong");
+    const manualList = h("div", { class: "chips", style: "margin:.4rem 0 .6rem" });
+    function updateCounts() {
+      countOut.textContent = String(v.selected.size); manualOut.textContent = String(v.manual.size); totalOut.textContent = String(recipientUids().length);
+      manualList.replaceChildren(...[...v.manual].map((u) => clients.find((c) => c.uid === u)).filter(Boolean).map((c) => h("button", { class: "chip", type: "button", title: "Quitar de este envío (no borra al cliente)", text: `${c.name} ✕`, onclick: () => { v.manual.delete(c.uid); updateCounts(); } })));
+      drawPreview(); drawLive();
+    }
     const hasPhone = (c) => c.contacts.some((ct) => validatePhone(ct.phone, S().config.defaultCountryCode).ok);
     const visible = () => {
       const q = normalizeText(v.query);
@@ -129,23 +137,68 @@ export function renderBroadcast(root, ctx) {
         h("thead", {}, h("tr", {}, h("th", {}, h("input", { type: "checkbox", "aria-label": "Seleccionar todos los que se ven", checked: allOn, onchange: (e) => { rows.forEach((c) => (e.target.checked ? v.selected.add(c.uid) : v.selected.delete(c.uid))); drawTable(); } })), th("name", "Cliente"), th("id", "ID"), th("zone", "Zona"), th("phone", "Teléfono"))),
         h("tbody", {}, shown.map((c) => {
           const ph = phoneOf(c);
-          return h("tr", {}, h("td", {}, h("input", { type: "checkbox", "aria-label": `Seleccionar ${c.name}`, checked: v.selected.has(c.uid), onchange: (e) => { e.target.checked ? v.selected.add(c.uid) : v.selected.delete(c.uid); countOut.textContent = String(v.selected.size); drawPreview(); } })),
+          return h("tr", {}, h("td", {}, h("input", { type: "checkbox", "aria-label": `Seleccionar ${c.name}`, checked: v.selected.has(c.uid), onchange: (e) => { e.target.checked ? v.selected.add(c.uid) : v.selected.delete(c.uid); updateCounts(); } })),
             h("td", {}, c.name, dup.get(nameKey(c.name)) > 1 ? h("span", { class: "badge warn", style: "margin-left:.5rem", text: "Repetido" }) : null), h("td", { text: c.id || "—" }), h("td", { text: c.zone || "—" }), h("td", {}, ph ? `+${ph.waNumber}` : h("span", { class: "badge warn", text: "Sin teléfono" })));
         }))));
       if (rows.length > shown.length) tableHost.append(h("p", { class: "hint", style: "padding:.5rem", text: `Se muestran ${shown.length} de ${rows.length}. Afina la búsqueda; «seleccionar todos» marca los ${rows.length}.` }));
-      countOut.textContent = String(v.selected.size);
-      drawPreview();
+      updateCounts();
     }
 
     const paceInputs = {};
     const draw_pace = () => Object.entries(paceInputs).forEach(([k, el]) => { el.value = v.pace[k]; });
-    const paceIn = (key, label, min, hint) => field(label, (paceInputs[key] = h("input", { type: "number", min, placeholder: String(DEFAULT_PACE[key]), value: v.pace[key], oninput: (e) => { v.pace[key] = e.target.value === "" ? "" : Number(e.target.value); } })), hint);
+    const paceIn = (key, label, min, hint) => field(label, (paceInputs[key] = h("input", { type: "number", min, placeholder: String(DEFAULT_PACE[key]), value: v.pace[key], oninput: (e) => { v.pace[key] = e.target.value === "" ? "" : Number(e.target.value); drawLive(); } })), hint);
+
+
+    const fmtMin = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`);
+    const liveOut = h("div", { class: "alert info", "aria-live": "polite" });
+    function drawLive() {
+      const n = recipientUids().length, e = estimateRun(n, v.pace), p = sanitizePace(v.pace), first = Math.min(n, p.dailyCap), risk = riskForDaily(first);
+      liveOut.className = `alert ${risk.level === "alto" ? "err" : risk.level === "medio" ? "warn" : "ok"}`;
+      liveOut.textContent = n ? `Con ${n} cliente(s) marcados y estas pausas: ~${fmtMin(e.minutesFirstDay)} el primer día (${first} envíos) y ${e.days} día(s) en total. Riesgo orientativo: ${risk.label}.` : "Marca clientes en el paso 2 para calcular cuánto tardará con estas pausas.";
+    }
+    const guideBox = h("details", { class: "guide ritmo", open: true },
+      h("summary", { text: "Guía de ritmo: cómo llenar cada campo" }),
+      liveOut,
+      h("dl", {},
+        h("dt", { text: "Pausa mínima (segundos)" }), h("dd", { text: "Lo menos que la herramienta espera entre un cliente y el siguiente. Evita ráfagas: nadie escribe a dos personas en 5 segundos. Recomendado: 60 o más." }),
+        h("dt", { text: "Pausa máxima (segundos)" }), h("dd", { text: "Lo más que puede esperar. La pausa real se sortea entre la mínima y la máxima, así los envíos no salen con un ritmo exacto de máquina. Usa por lo menos el doble de la mínima." }),
+        h("dt", { text: "Máximo de envíos por día (en total)" }), h("dd", { text: "Suma de todos los clientes en un día; cada cliente recibe el comunicado una sola vez. Al llegar al tope la herramienta se detiene y lo pendiente sigue al día siguiente. Es el campo que más pesa para la seguridad de la cuenta." })),
+      h("h3", { text: "Para enviar todo el mismo día" }),
+      h("div", { class: "table-wrap" }, h("table", {},
+        h("thead", {}, h("tr", {}, ["Clientes", "Pausa mínima", "Pausa máxima", "Máximo por día", "Duración aprox.", "Cómo hacerlo", "Riesgo"].map((t) => h("th", { text: t })))),
+        h("tbody", {}, SAME_DAY_GUIDE.map((r, i) => h("tr", {}, h("td", { text: i ? `${SAME_DAY_GUIDE[i - 1].upTo + 1} a ${r.upTo}` : `Hasta ${r.upTo}` }), h("td", { text: `${r.minDelay} s` }), h("td", { text: `${r.maxDelay} s` }), h("td", { text: String(r.dailyCap) }), h("td", { text: `~${fmtMin(r.minutesFirstDay)}` }), h("td", { text: r.tandas }), h("td", {}, h("span", { class: `badge ${r.risk.level === "bajo" ? "ok" : r.risk.level === "medio" ? "warn" : "err"}`, text: r.risk.label }))))))),
+      h("p", { class: "hint", text: "Más de 200 clientes: no se recomienda en un solo día; reparte en 2 o más días con un máximo de 60–100 por día. El riesgo es orientativo: WhatsApp no publica sus límites. Si la línea es nueva o poco usada, baja los números a la mitad." }));
+
+
+    // --- agregar a mano ---
+    const mName = h("input", { type: "text", placeholder: "Nombre del cliente", autocomplete: "off" });
+    const mPhone = h("input", { type: "tel", inputmode: "tel", placeholder: "300 123 4567", autocomplete: "off" });
+    const mBulk = h("textarea", { rows: 4, placeholder: "Uno por línea:\nAmbrosia Toy Store, 300 123 4567\nAirtempe SAS; 3004975195" });
+    function applyManual(entries) {
+      if (!entries.length) { toast("Escribe al menos un nombre y un teléfono", "err"); return false; }
+      let res;
+      store.commit((d) => { res = addManualClients(d.clients, entries, d.config.defaultCountryCode); });
+      res.uids.forEach((u) => v.manual.add(u));
+      const bad = res.rejected.filter((r) => !/ya es de/.test(r.reason));
+      const dupMsg = res.rejected.filter((r) => /ya es de/.test(r.reason)).length;
+      toast(`${res.added} nuevo(s), ${res.merged} con teléfono agregado, ${res.uids.length} seleccionado(s)${dupMsg ? `; ${dupMsg} número(s) ya existían` : ""}`, bad.length ? "info" : "ok", 5000);
+      if (bad.length) toast(`No se agregaron: ${bad.slice(0, 3).map((r) => `${r.name || r.phone} (${r.reason})`).join("; ")}${bad.length > 3 ? "…" : ""}`, "err", 8000);
+      draw();
+      return !bad.length;
+    }
+    const manualBox = h("details", { class: "guide", open: false },
+      h("summary", { text: "Agregar clientes a mano (nombre y teléfono)" }),
+      h("div", { class: "row" }, field("Nombre del cliente", mName), field("Teléfono (WhatsApp)", mPhone),
+        h("div", { class: "field" }, h("label", { class: "sr", for: "mAdd", text: "Agregar" }), h("button", { id: "mAdd", class: "btn btn-secondary", type: "button", text: "Agregar y seleccionar", style: "margin-top:1.45rem", onclick: () => { applyManual([{ name: mName.value, phone: mPhone.value }]); } }))),
+      field("O pega varios a la vez", mBulk, "Un cliente por línea, con el nombre y el teléfono separados por coma, punto y coma o tabulador (sirve pegar dos columnas de Excel)."),
+      h("div", { class: "actions" }, h("button", { id: "mAddBulk", class: "btn btn-secondary btn-sm", type: "button", text: "Agregar los pegados", onclick: () => { applyManual(parseManualLines(mBulk.value)); } })),
+      h("p", { class: "hint", text: "Quedan guardados en «Clientes y contactos» y marcados para este comunicado. Si el nombre ya existe, solo se le suma el teléfono; si el número ya es de otro cliente, no se duplica." }));
 
     // --- acciones ---
     async function prepare() {
       if (!(await saveDraft())) return;
       v.pace = sanitizePace(v.pace); draw_pace();
-      const plan = planRecipients({ clients, uids: [...v.selected], followups: S().followups, statuses: S().config.statuses, countryCode: S().config.defaultCountryCode, skipNotInterested: v.skipNotInterested });
+      const plan = planRecipients({ clients, uids: recipientUids(), followups: S().followups, statuses: S().config.statuses, countryCode: S().config.defaultCountryCode, skipNotInterested: v.skipNotInterested });
       if (!plan.ok.length) { toast("Ninguno de los clientes elegidos tiene un teléfono válido.", "err", 5000); return; }
       let built;
       try { built = buildRunItems({ recipients: plan.ok, variants: draft.variants, config: S().config }); } catch (e) { toast(e.message, "err"); return; }
@@ -189,20 +242,24 @@ export function renderBroadcast(root, ctx) {
       previewBox,
       h("section", { class: "card", "aria-labelledby": "h-c2" },
         h("div", { class: "panel-title" }, h("h2", { id: "h-c2", text: "2 · Clientes que lo recibirán" }), h("button", { class: "btn btn-secondary btn-sm", type: "button", text: "Adjuntar clientes y teléfonos desde Excel", onclick: () => openImport(ctx, () => draw()) })),
+        manualBox,
         h("div", { class: "row" },
           field("Buscar", h("input", { type: "search", placeholder: "Nombre, ID o zona", value: v.query, oninput: (e) => { v.query = e.target.value; drawTable(); } })),
           field("Comercial", h("select", { onchange: (e) => { v.owner = e.target.value; drawTable(); } }, h("option", { value: "", text: "Todos" }), owners.map((o) => h("option", { value: o, text: o, selected: o === v.owner })))),
           field("Zona", h("select", { onchange: (e) => { v.zone = e.target.value; drawTable(); } }, h("option", { value: "", text: "Todas" }), zones.map((o) => h("option", { value: o, text: o, selected: o === v.zone }))))),
         h("div", { class: "check", style: "margin-bottom:.6rem" }, h("input", { id: "bcPhone", type: "checkbox", checked: v.onlyPhone, onchange: (e) => { v.onlyPhone = e.target.checked; drawTable(); } }), h("label", { for: "bcPhone", text: "Mostrar solo clientes con teléfono válido" })),
         h("div", { class: "check", style: "margin-bottom:.6rem" }, h("input", { id: "bcNoInt", type: "checkbox", checked: v.skipNotInterested, onchange: (e) => { v.skipNotInterested = e.target.checked; } }), h("label", { for: "bcNoInt", text: "Excluir a los marcados «No interesado» en Seguimiento comercial" })),
-        h("div", { class: "actions" }, h("span", {}, "Seleccionados: ", countOut), h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Limpiar selección", onclick: () => { v.selected.clear(); drawTable(); } })),
+        h("div", { class: "actions" }, h("span", {}, "Marcados en la tabla: ", countOut), h("span", {}, "· Agregados a mano: ", manualOut), h("span", {}, "· Se enviará a: ", totalOut), h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Limpiar selección", onclick: () => { v.selected.clear(); v.manual.clear(); drawTable(); } })),
+        manualList,
+        h("div", { class: "check", style: "margin-bottom:.6rem" }, h("input", { id: "bcInclTable", type: "checkbox", checked: v.includeTable, onchange: (e) => { v.includeTable = e.target.checked; updateCounts(); } }), h("label", { for: "bcInclTable", text: "Enviar también a los clientes marcados en la tabla (si lo quitas, solo se envía a los agregados a mano)" })),
         tableHost),
       h("section", { class: "card", "aria-labelledby": "h-c3" },
         h("h2", { id: "h-c3", text: "3 · Ritmo de envío" }),
         h("div", { class: "row" }, paceIn("minDelay", "Pausa mínima (segundos)", 10), paceIn("maxDelay", "Pausa máxima (segundos)", 10), paceIn("dailyCap", "Máximo de envíos por día (en total)", 1, "Es la suma de todos los clientes, no por cliente: cada cliente recibe el comunicado una sola vez. Si hay más clientes que el tope, el resto queda pendiente para el día siguiente. Cuentas nuevas: 20–30.")),
+        guideBox,
         h("p", { class: "hint", text: "Entre un cliente y otro la herramienta espera un tiempo al azar dentro de ese rango antes de dejarte abrir el siguiente chat." }),
         h("div", { class: "actions" }, h("button", { class: "btn btn-primary", type: "button", text: "Preparar envío", onclick: prepare }))),
-      runsList,
+      ...(runsList ? [runsList] : []),
     );
     drawVariants(); drawTable(); drawMedia();
   }
