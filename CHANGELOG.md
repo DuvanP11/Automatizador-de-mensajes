@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.0 — Comunicados con imagen o video
+- **Comunicados (nueva sección):** adjunta una imagen o un video (hasta 16 MB, guardado solo en este navegador), escribe de 2 a 6 redacciones y elige los clientes. Cada cliente recibe una redacción distinta a la del anterior; dentro de cada una siguen funcionando las variables y las alternativas `[[a|b]]`.
+- **Clientes:** tabla con búsqueda y filtros por comercial y zona, «seleccionar todos» y botón para **adjuntar más clientes con sus teléfonos desde Excel** (importador existente). Se omiten sin teléfono válido, números repetidos y, si se quiere, los «No interesado».
+- **Cola de envío de a uno:** pausa aleatoria configurable entre envíos, tope diario y avance guardado (se puede cerrar y seguir al día siguiente). «Copiar imagen» / «Descargar» / «Compartir…», «Abrir WhatsApp» con el texto listo y «Ya lo envié», que anota el contacto en Seguimiento comercial. Exporta el resultado a CSV.
+- La CSP ahora permite `blob:` en imágenes y media para la vista previa del archivo adjunto.
+- 8 pruebas unitarias (`tests/broadcast.test.js`) y 16 de navegador (`e2e/comunicados.mjs`).
+
 ## 2.2.0 — Personalización, ayuda integrada, tutorial y buzón de ideas
 - **Apariencia (nueva sección):** modo claro/oscuro/automático, 6 paletas, paleta **personalizada** con 10 colores (fondos, tarjetas, texto, bordes, botones, avisos…), tamaño de letra y esquinas. Los tonos derivados (hover, fondos de alertas, texto sobre cada color) se calculan solos y se avisa si una combinación queda ilegible. «Restablecer apariencia» vuelve al diseño original. Se guarda por navegador y se aplica antes de pintar.
 - **Ayudas flotantes:** globo explicativo en cada opción del menú y en los botones clave de cada pantalla (mouse y teclado; Esc lo cierra) y botón «?» con «cómo se usa / cómo ajustarlo» por sección. Se pueden desactivar en Apariencia.

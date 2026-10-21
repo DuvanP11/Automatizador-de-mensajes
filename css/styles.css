@@ -240,3 +240,11 @@ ul.plain { margin: 0; padding-left: 1.2rem; } ul.plain li { margin-bottom: .3rem
   html[data-nav="collapsed"] .nav { flex-direction: row; }
   .help-panel { bottom: 4.2rem; }
 }
+
+/* Comunicados */
+.media-prev { display: block; max-width: 320px; max-height: 240px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin: .4rem 0; }
+.variant { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .7rem .8rem; margin-bottom: .7rem; }
+.chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; }
+.chip { font: inherit; font-family: ui-monospace, Menlo, monospace; font-size: .78rem; padding: .2rem .55rem; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.chip:hover { background: var(--brand-50); }
+ul.plain { list-style: none; margin: 0; padding: 0; } ul.plain li { padding: .4rem 0; border-top: 1px solid var(--border); }

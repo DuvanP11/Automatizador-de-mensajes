@@ -8,7 +8,7 @@ const KEY = "pibox_automatizador_v2";
 export const SCHEMA_VERSION = 2;
 
 export function emptyState() {
-  return { version: SCHEMA_VERSION, clients: [], templates: defaultTemplates(), followups: {}, ideas: [], config: deepClone(DEFAULT_CONFIG), seeded: false, lastBackupAt: "" };
+  return { version: SCHEMA_VERSION, clients: [], templates: defaultTemplates(), followups: {}, ideas: [], broadcasts: [], runs: [], config: deepClone(DEFAULT_CONFIG), seeded: false, lastBackupAt: "" };
 }
 
 /** Completa claves faltantes (migraciones suaves) sin tocar lo existente. */
@@ -27,6 +27,8 @@ export function normalizeState(raw) {
   if (!s.templates.some((t) => t.isDefault)) s.templates[0].isDefault = true;
   s.clients = (Array.isArray(s.clients) ? s.clients : []).map((c) => ({ contacts: [], legalName: "", zone: "", owner: "", notes: "", ...c, contacts: (c.contacts || []).map((ct) => ({ cid: ct.cid || uid("ct"), name: "", phone: "", email: "", primary: false, ...ct })) }));
   s.ideas = (Array.isArray(s.ideas) ? s.ideas : []).filter((i) => i && typeof i.title === "string" && typeof i.text === "string");
+  s.broadcasts = (Array.isArray(s.broadcasts) ? s.broadcasts : []).filter((b) => b && typeof b.id === "string" && Array.isArray(b.variants));
+  s.runs = (Array.isArray(s.runs) ? s.runs : []).filter((r) => r && typeof r.id === "string" && Array.isArray(r.items));
   s.followups = s.followups && typeof s.followups === "object" ? s.followups : {};
   s.version = SCHEMA_VERSION;
   return s;

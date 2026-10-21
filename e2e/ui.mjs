@@ -51,7 +51,7 @@ await p.evaluate(() => localStorage.clear()); await p.reload({ waitUntil: "netwo
 
 // ---------- Menú ----------
 const links = await p.$$eval("#nav a", (a) => a.map((x) => x.getAttribute("href")));
-check("El menú tiene 9 opciones, incluidas Apariencia, Tutorial y Buzón de ideas", links.length === 9 && ["#/apariencia", "#/tutorial", "#/ideas"].every((h) => links.includes(h)), links.join(","));
+check("El menú tiene 10 opciones, incluidas Apariencia, Tutorial y Buzón de ideas", links.length === 10 && ["#/apariencia", "#/tutorial", "#/ideas"].every((h) => links.includes(h)), links.join(","));
 const wide = await p.$eval(".sidebar", (e) => e.getBoundingClientRect().width);
 check("Menú expandido: ~236 px y botón «Contraer el menú»", Math.abs(wide - 236) < 2 && (await p.$eval("#navToggle", (e) => e.getAttribute("aria-label"))) === "Contraer el menú" && (await p.$eval("#navToggle", (e) => e.getAttribute("aria-expanded"))) === "true", wide);
 await shot("01-menu-expandido");
@@ -179,16 +179,16 @@ check("Restablecer apariencia vuelve al morado Pibox, letra 15 px y esquinas nor
 
 // ---------- Tutorial ----------
 await go("tutorial");
-check("Tutorial: 9 pasos con enlace a su sección", (await p.$$eval("main ol.steps li", (e) => e.length)) === 9 && (await p.$$eval("main ol.steps a", (a) => a.every((x) => x.getAttribute("href").startsWith("#/")))));
+check("Tutorial: 10 pasos con enlace a su sección", (await p.$$eval("main ol.steps li", (e) => e.length)) === 10 && (await p.$$eval("main ol.steps a", (a) => a.every((x) => x.getAttribute("href").startsWith("#/")))));
 await shot("12-tutorial");
 await clickText("▶ Iniciar recorrido guiado"); await sleep(200);
 const coach = await p.$eval(".coach", (e) => e.textContent).catch(() => "");
-check("Recorrido guiado: abre en el paso 1 señalando el botón del menú", coach.includes("Paso 1 de 11") && coach.includes("Contraer o expandir"), coach.slice(0, 60));
+check("Recorrido guiado: abre en el paso 1 señalando el botón del menú", coach.includes("Paso 1 de 12") && coach.includes("Contraer o expandir"), coach.slice(0, 60));
 check("Resalta el elemento que explica", await p.$eval("#navToggle", (e) => e.classList.contains("tour-focus")));
 await shot("13-recorrido");
 const seen = [coach];
-for (let i = 0; i < 10; i++) { await clickText("Siguiente →", ".coach"); seen.push(await p.$eval(".coach", (e) => e.textContent).catch(() => "")); }
-check("Recorre las 9 opciones del menú y el botón de ayuda", ["Generador de mensajes", "Apariencia", "Buzón de ideas", "Ayuda de cada sección"].every((t) => seen.some((s) => s.includes(t))), seen.map((s) => s.slice(0, 20)).join("|"));
+for (let i = 0; i < 11; i++) { await clickText("Siguiente →", ".coach"); seen.push(await p.$eval(".coach", (e) => e.textContent).catch(() => "")); }
+check("Recorre las 10 opciones del menú y el botón de ayuda", ["Generador de mensajes", "Apariencia", "Buzón de ideas", "Ayuda de cada sección"].every((t) => seen.some((s) => s.includes(t))), seen.map((s) => s.slice(0, 20)).join("|"));
 check("La tarjeta del recorrido siempre queda dentro de la pantalla", await p.$eval(".coach", (e) => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; }));
 await clickText("Terminar", ".coach"); await sleep(100);
 check("Terminar cierra el recorrido y quita el resaltado", !(await p.$(".coach")) && !(await p.$(".tour-focus")));
