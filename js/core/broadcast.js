@@ -27,7 +27,7 @@ export function validateMedia(file) {
 }
 
 export function newBroadcast(id) {
-  return { id, name: "", variants: [{ id: "v1", body: "" }], media: null, createdAt: new Date().toISOString() };
+  return { id, name: "", variants: [{ id: "v1", body: "" }], autoVary: true, media: null, createdAt: new Date().toISOString() };
 }
 
 /** Pausa aleatoria (en segundos) entre min y max, ambos incluidos. Si min > max se intercambian. */
@@ -79,6 +79,11 @@ export function assignVariants(count, nVariants, rand = Math.random) {
   return out.slice(0, count);
 }
 
+/** Redacciones listas para sortear: sin las vacías y, con la variación automática, con frases equivalentes agregadas donde no las haya. */
+export function effectiveBodies(variants, autoVary) {
+  return variants.map((v) => v.body).filter((b) => b.trim()).map((b) => (autoVary ? suggestAlternatives(b).text : b));
+}
+
 /** Cuántos textos distintos puede producir una redacción con sus grupos [[a|b|c]]. */
 export function countCombos(body) {
   let n = 1;
@@ -91,8 +96,8 @@ export function countCombos(body) {
  * Cada grupo [[a|b]] se sortea por separado para cada cliente, y se evita repetir la misma combinación mientras queden otras.
  * @returns {{items:object[], warnings:string[], distinct:number}} distinct = combinaciones de redacción distintas usadas
  */
-export function buildRunItems({ recipients, variants, config, now = new Date(), rand = Math.random }) {
-  const bodies = variants.map((v) => v.body).filter((b) => b.trim());
+export function buildRunItems({ recipients, variants, config, now = new Date(), rand = Math.random, autoVary = false }) {
+  const bodies = effectiveBodies(variants, autoVary);
   if (!bodies.length) throw new Error("Escribe al menos una redacción del comunicado.");
   const order = assignVariants(recipients.length, bodies.length, rand);
   const warnings = new Set(), used = new Set();
