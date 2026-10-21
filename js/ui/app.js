@@ -1,6 +1,7 @@
 import { createStore, seedClients } from "../core/store.js";
 import { h, toast, confirmDialog } from "./dom.js";
 import { renderGenerator } from "./generator.js";
+import { renderBroadcast } from "./broadcast.js";
 import { renderClients } from "./clients.js";
 import { renderTemplates } from "./templates.js";
 import { renderFollowup } from "./followup.js";
@@ -15,6 +16,7 @@ import { initTips, applyControlTips, mountHelpButton, setHelpSection, closeHelp 
 
 const ROUTES = [
   { path: "generador", label: "Generador de mensajes", ico: "✉", render: renderGenerator },
+  { path: "comunicados", label: "Comunicados", ico: "📣", render: renderBroadcast },
   { path: "clientes", label: "Clientes y contactos", ico: "👥", render: renderClients },
   { path: "plantillas", label: "Plantillas", ico: "📝", render: renderTemplates },
   { path: "seguimiento", label: "Seguimiento comercial", ico: "📌", render: renderFollowup },

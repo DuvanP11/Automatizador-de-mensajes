@@ -29,6 +29,28 @@ export const HELP = {
       { match: "Editar plantillas", tip: "Te lleva a Plantillas para cambiar el texto base de los mensajes." },
     ],
   },
+  comunicados: {
+    short: "Envía una imagen o un video con su texto a varios clientes, de a uno y con pausas.",
+    summary: "Para avisos y novedades: adjuntas la imagen o el video, escribes dos o más redacciones y eliges los clientes. La herramienta arma una cola y te deja cada chat listo; tú das el clic de envío, con una pausa al azar entre cliente y cliente.",
+    steps: [
+      "En «1 · Comunicado» ponle nombre, adjunta la imagen o el video y escribe 2 o más redacciones.",
+      "En «2 · Clientes» filtra, marca los que recibirán el aviso o adjunta más clientes con teléfono desde Excel.",
+      "En «3 · Ritmo» define la pausa entre envíos y el tope diario; pulsa «Preparar envío».",
+      "Por cada cliente: «Abrir WhatsApp», pega la imagen (Ctrl+V) o adjunta el video, envía y pulsa «Ya lo envié».",
+    ],
+    adjust: [
+      "Cada cliente recibe una redacción distinta a la del anterior.",
+      "Si llegas al tope diario, la cola queda guardada y sigues al día siguiente.",
+      "Los archivos viven solo en este navegador; si cambias de equipo, vuelve a adjuntarlos.",
+    ],
+    controls: [
+      { match: "Preparar envío", tip: "Arma la cola con un texto por cliente, omitiendo teléfonos inválidos y repetidos." },
+      { match: "Adjuntar clientes y teléfonos desde Excel", tip: "Abre el importador para traer más clientes con sus teléfonos y seleccionarlos aquí." },
+      { match: "Copiar imagen", tip: "Copia la imagen para pegarla en el chat con Ctrl+V (⌘V en Mac)." },
+      { match: "Abrir WhatsApp", tip: "Abre el chat con el texto escrito. Se habilita cuando termina la pausa entre envíos." },
+      { match: "✓ Ya lo envié", tip: "Marca al cliente como enviado, inicia la siguiente pausa y lo anota en Seguimiento comercial." },
+    ],
+  },
   clientes: {
     short: "Tu base de clientes y sus contactos. Importa desde Excel y asigna a cada comercial.",
     summary: "Aquí vive la base: cada empresa con uno o varios contactos. Puedes crear clientes a mano o importar archivos de Excel con un asistente que te muestra todo antes de guardar.",
@@ -175,6 +197,7 @@ export const TUTORIAL = [
   { path: "clientes", title: "Carga tus clientes", text: "Usa «Agregar o sincronizar clientes» para subir tu Excel. La aplicación te muestra qué es nuevo, qué cambia y qué está repetido antes de guardar nada.", tip: "Si te equivocas, «Deshacer última importación» lo revierte." },
   { path: "plantillas", title: "Revisa tu plantilla", text: "La plantilla es el molde del mensaje. Las {{variables}} se llenan solas con los datos del cliente; las frases [[A|B]] permiten variar la redacción.", tip: "Usa «Probar con» para ver el resultado con un cliente real." },
   { path: "generador", title: "Genera y envía un mensaje", text: "Busca el cliente, revisa el mensaje generado, edítalo si quieres y pulsa «Abrir en WhatsApp». Tú das el último clic: la aplicación nunca envía por sí sola.", tip: "Marca «Registrar el contacto en Seguimiento» para no olvidar a quién le escribiste." },
+  { path: "comunicados", title: "Envía un comunicado con imagen o video", text: "Adjunta el archivo, escribe 2 o más redacciones, marca los clientes y prepara la cola. Se envía de a uno, con una pausa al azar entre cada cliente y un tope diario.", tip: "Prueba primero con un cliente tuyo para ver cómo queda el texto junto a la imagen." },
   { path: "seguimiento", title: "Haz seguimiento", text: "Cambia el estado de cada cliente, fija la próxima fecha de contacto y deja notas. Los vencidos se resaltan para que nadie se quede sin respuesta.", tip: "«Solo seguimientos vencidos» es tu lista de pendientes del día." },
   { path: "informes", title: "Mide tu gestión", text: "Los informes se calculan con tus datos. Cada indicador explica qué mide, y puedes descargar todo en Excel.", tip: "Los filtros cambian las cifras y también el Excel descargado." },
   { path: "apariencia", title: "Personaliza la apariencia", text: "Cambia colores, tamaño de letra y esquinas. Es solo para tu navegador y se aplica al instante.", tip: "«Restablecer apariencia» te devuelve al diseño original." },
