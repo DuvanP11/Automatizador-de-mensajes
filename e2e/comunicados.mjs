@@ -91,6 +91,12 @@ await clickText("Sí, con imagen");
 const after = await p.evaluate(() => ({ st: window.__pibox.store.state.runs[0].items[0].status, nextAt: window.__pibox.store.state.runs[0].nextAt, btn: document.querySelector("#bcOpen")?.disabled, fu: Object.keys(window.__pibox.store.state.followups).length }));
 check("Marcar enviado inicia la pausa y deshabilita el botón", after.st === "sent" && after.nextAt > Date.now() && after.btn === true, JSON.stringify(after));
 check("Se anota en Seguimiento comercial", after.fu === 1);
+await p.evaluate(() => document.querySelector("#bcBlockRun").click()); await sleep(250);
+check("Quitar el bloqueo pide confirmación", await p.evaluate(() => /Quitar el bloqueo de la pausa/.test(document.querySelector("dialog")?.textContent || "")));
+await clickText("Quitar el bloqueo"); await sleep(250);
+const free = await p.evaluate(() => ({ dis: document.querySelector("#bcOpen")?.disabled, txt: document.querySelector("#bcOpen")?.textContent, blk: window.__pibox.store.state.runs[0].pace.block }));
+check("Sin bloqueo el botón sigue habilitado y solo sugiere la pausa", free.dis === false && /pausa sugerida/.test(free.txt) && free.blk === false, JSON.stringify(free));
+
 await clickText("✓ Ya lo envié"); await clickText("Salió sin imagen");
 const miss = await p.evaluate(() => ({ flag: window.__pibox.store.state.runs[0].items[1].noMedia, btn: [...document.querySelectorAll("button")].some((x) => x.textContent === "Enviar imagen"), first: window.__pibox.store.state.runs[0].items[0].noMedia }));
 check("«Salió sin imagen» queda marcado y ofrece reenviar la imagen", miss.flag === true && miss.btn && miss.first === false, JSON.stringify(miss));

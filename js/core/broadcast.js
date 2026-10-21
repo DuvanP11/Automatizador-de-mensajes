@@ -5,7 +5,8 @@ import { buildValues, renderTemplate } from "./templates.js";
 import { stageOf } from "./followup.js";
 
 export const MAX_VARIANTS = 6;
-export const DEFAULT_PACE = { minDelay: 45, maxDelay: 120, dailyCap: 40 };
+// block: true = el botón «Abrir WhatsApp» queda bloqueado durante la pausa; false = la pausa solo se sugiere.
+export const DEFAULT_PACE = { minDelay: 45, maxDelay: 120, dailyCap: 40, block: true };
 
 // Límites de WhatsApp: fotos hasta 16 MB; videos hasta 16 MB para que se envíen como video (más grandes viajan como documento).
 export const MEDIA_LIMITS = { image: 16 * 1024 * 1024, video: 16 * 1024 * 1024 };
@@ -190,7 +191,7 @@ export const currentItem = (run) => run.items.find((i) => i.status === "pending"
 export function sanitizePace(p = {}) {
   const num = (x, def, min) => (Number.isFinite(Number(x)) && x !== "" && x !== null && Number(x) >= min ? Math.round(Number(x)) : def);
   const minDelay = num(p.minDelay, DEFAULT_PACE.minDelay, 5);
-  return { minDelay, maxDelay: Math.max(minDelay, num(p.maxDelay, DEFAULT_PACE.maxDelay, 5)), dailyCap: num(p.dailyCap, DEFAULT_PACE.dailyCap, 1) };
+  return { minDelay, maxDelay: Math.max(minDelay, num(p.maxDelay, DEFAULT_PACE.maxDelay, 5)), dailyCap: num(p.dailyCap, DEFAULT_PACE.dailyCap, 1), block: p.block !== false };
 }
 
 /** Tiempo estimado de una cola: cada envío promedia (min+max)/2 s de pausa. Devuelve minutos y la cantidad de días según el tope. */
