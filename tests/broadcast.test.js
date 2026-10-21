@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateMedia, nextDelaySeconds, planRecipients, assignVariants, buildRunItems, newRun, sentTodayCount, runProgress, currentItem, MEDIA_LIMITS } from "../js/core/broadcast.js";
+import { validateMedia, nextDelaySeconds, planRecipients, assignVariants, buildRunItems, newRun, sentTodayCount, runProgress, currentItem, MEDIA_LIMITS, sanitizePace } from "../js/core/broadcast.js";
 import { DEFAULT_CONFIG } from "../js/core/config.js";
 import { deepClone } from "../js/core/util.js";
 import { normalizeState } from "../js/core/store.js";
@@ -73,4 +73,11 @@ test("normalizeState conserva comunicados y colas, y descarta basura", () => {
   const s = normalizeState({ clients: [], broadcasts: [{ id: "b1", variants: [] }, { nope: 1 }], runs: [{ id: "r", items: [] }, "x"] });
   assert.equal(s.broadcasts.length, 1); assert.equal(s.runs.length, 1);
   assert.deepEqual(normalizeState({ clients: [] }).runs, []);
+});
+
+test("sanitizePace: vacío, 0 o negativo vuelven al valor por defecto y max nunca queda bajo min", () => {
+  assert.deepEqual(sanitizePace({ minDelay: "", maxDelay: 0, dailyCap: "" }), { minDelay: 45, maxDelay: 120, dailyCap: 40 });
+  assert.equal(sanitizePace({ dailyCap: 0 }).dailyCap, 40);
+  assert.equal(sanitizePace({ dailyCap: 229 }).dailyCap, 229);
+  assert.equal(sanitizePace({ minDelay: 90, maxDelay: 30 }).maxDelay, 90);
 });

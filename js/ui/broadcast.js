@@ -3,7 +3,7 @@ import { openImport } from "./clients.js";
 import { VARIABLES, whatsappUrl, buildValues, renderTemplate } from "../core/templates.js";
 import { normalizeText, nameKey, uid, validatePhone, todayBogota } from "../core/util.js";
 import { newFollowup, updateFollowup, stageOf } from "../core/followup.js";
-import { MAX_VARIANTS, DEFAULT_PACE, newBroadcast, validateMedia, planRecipients, buildRunItems, newRun, nextDelaySeconds, sentTodayCount, runProgress, currentItem } from "../core/broadcast.js";
+import { MAX_VARIANTS, DEFAULT_PACE, sanitizePace, newBroadcast, validateMedia, planRecipients, buildRunItems, newRun, nextDelaySeconds, sentTodayCount, runProgress, currentItem } from "../core/broadcast.js";
 import { putMedia, getMedia, deleteMedia, copyImageToClipboard, canShareFile } from "./media-db.js";
 
 const SAMPLE = [["{{saludo}} {{nombre_cliente}} 👋", "Te compartimos un comunicado importante de Pibox."], ["[[Hola|Buen día|Qué tal]] {{nombre_cliente}}", "Queremos contarte una novedad de Pibox."]];
@@ -137,11 +137,14 @@ export function renderBroadcast(root, ctx) {
       drawPreview();
     }
 
-    const paceIn = (key, label, min, hint) => field(label, h("input", { type: "number", min, value: v.pace[key], oninput: (e) => { v.pace[key] = Number(e.target.value); } }), hint);
+    const paceInputs = {};
+    const draw_pace = () => Object.entries(paceInputs).forEach(([k, el]) => { el.value = v.pace[k]; });
+    const paceIn = (key, label, min, hint) => field(label, (paceInputs[key] = h("input", { type: "number", min, placeholder: String(DEFAULT_PACE[key]), value: v.pace[key], oninput: (e) => { v.pace[key] = e.target.value === "" ? "" : Number(e.target.value); } })), hint);
 
     // --- acciones ---
     async function prepare() {
       if (!(await saveDraft())) return;
+      v.pace = sanitizePace(v.pace); draw_pace();
       const plan = planRecipients({ clients, uids: [...v.selected], followups: S().followups, statuses: S().config.statuses, countryCode: S().config.defaultCountryCode, skipNotInterested: v.skipNotInterested });
       if (!plan.ok.length) { toast("Ninguno de los clientes elegidos tiene un teléfono válido.", "err", 5000); return; }
       let built;
@@ -196,7 +199,7 @@ export function renderBroadcast(root, ctx) {
         tableHost),
       h("section", { class: "card", "aria-labelledby": "h-c3" },
         h("h2", { id: "h-c3", text: "3 · Ritmo de envío" }),
-        h("div", { class: "row" }, paceIn("minDelay", "Pausa mínima (segundos)", 10), paceIn("maxDelay", "Pausa máxima (segundos)", 10), paceIn("dailyCap", "Tope de envíos por día", 1, "Cuentas nuevas o poco usadas: empieza con 20–30.")),
+        h("div", { class: "row" }, paceIn("minDelay", "Pausa mínima (segundos)", 10), paceIn("maxDelay", "Pausa máxima (segundos)", 10), paceIn("dailyCap", "Máximo de envíos por día (en total)", 1, "Es la suma de todos los clientes, no por cliente: cada cliente recibe el comunicado una sola vez. Si hay más clientes que el tope, el resto queda pendiente para el día siguiente. Cuentas nuevas: 20–30.")),
         h("p", { class: "hint", text: "Entre un cliente y otro la herramienta espera un tiempo al azar dentro de ese rango antes de dejarte abrir el siguiente chat." }),
         h("div", { class: "actions" }, h("button", { class: "btn btn-primary", type: "button", text: "Preparar envío", onclick: prepare }))),
       runsList,
