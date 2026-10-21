@@ -108,3 +108,10 @@ export const runProgress = (run) => {
 
 /** Primer destinatario pendiente (el que sigue en la cola) o null. */
 export const currentItem = (run) => run.items.find((i) => i.status === "pending") || null;
+
+/** Valores válidos para el ritmo: un campo vacío, 0 o negativo vuelve al valor por defecto (si no, el tope 0 bloquearía toda la cola). */
+export function sanitizePace(p = {}) {
+  const num = (x, def, min) => (Number.isFinite(Number(x)) && x !== "" && x !== null && Number(x) >= min ? Math.round(Number(x)) : def);
+  const minDelay = num(p.minDelay, DEFAULT_PACE.minDelay, 5);
+  return { minDelay, maxDelay: Math.max(minDelay, num(p.maxDelay, DEFAULT_PACE.maxDelay, 5)), dailyCap: num(p.dailyCap, DEFAULT_PACE.dailyCap, 1) };
+}
