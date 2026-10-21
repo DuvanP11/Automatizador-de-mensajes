@@ -248,3 +248,5 @@ ul.plain { margin: 0; padding-left: 1.2rem; } ul.plain li { margin-bottom: .3rem
 .chip { font: inherit; font-family: ui-monospace, Menlo, monospace; font-size: .78rem; padding: .2rem .55rem; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
 .chip:hover { background: var(--brand-50); }
 ul.plain { list-style: none; margin: 0; padding: 0; } ul.plain li { padding: .4rem 0; border-top: 1px solid var(--border); }
+.sort-btn { font: inherit; font-weight: 700; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; }
+.sort-btn:hover { text-decoration: underline; }

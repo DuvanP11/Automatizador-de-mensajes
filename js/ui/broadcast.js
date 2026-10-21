@@ -1,7 +1,7 @@
 import { h, field, toast, confirmDialog, download, insertAtCursor } from "./dom.js";
 import { openImport } from "./clients.js";
 import { VARIABLES, whatsappUrl } from "../core/templates.js";
-import { normalizeText, uid, validatePhone, todayBogota } from "../core/util.js";
+import { normalizeText, nameKey, uid, validatePhone, todayBogota } from "../core/util.js";
 import { newFollowup, updateFollowup, stageOf } from "../core/followup.js";
 import { MAX_VARIANTS, DEFAULT_PACE, newBroadcast, validateMedia, planRecipients, buildRunItems, newRun, nextDelaySeconds, sentTodayCount, runProgress, currentItem } from "../core/broadcast.js";
 import { putMedia, getMedia, deleteMedia, copyImageToClipboard, canShareFile } from "./media-db.js";
@@ -11,7 +11,7 @@ const SAMPLE = [["{{saludo}} {{nombre_cliente}} 👋", "Te compartimos un comuni
 export function renderBroadcast(root, ctx) {
   const { store } = ctx;
   const S = () => store.state;
-  const v = (ctx.bc ||= { broadcastId: "", runId: "", selected: new Set(), query: "", owner: "", zone: "", onlyPhone: true, pace: { ...DEFAULT_PACE }, skipNotInterested: true });
+  const v = (ctx.bc ||= { broadcastId: "", runId: "", selected: new Set(), query: "", owner: "", zone: "", onlyPhone: true, sortKey: "name", sortDir: 1, pace: { ...DEFAULT_PACE }, skipNotInterested: true });
   let draft = null, mediaFile = null, previewUrl = "", timer = null;
 
   const stop = () => { clearInterval(timer); timer = null; if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = ""; } };
@@ -91,15 +91,23 @@ export function renderBroadcast(root, ctx) {
       const q = normalizeText(v.query);
       return clients.filter((c) => (!q || normalizeText(`${c.name} ${c.id} ${c.legalName} ${c.zone}`).includes(q)) && (!v.owner || c.owner === v.owner) && (!v.zone || c.zone === v.zone) && (!v.onlyPhone || hasPhone(c)));
     };
+    const phoneOf = (c) => c.contacts.map((ct) => validatePhone(ct.phone, S().config.defaultCountryCode)).find((r) => r.ok);
+    const SORT = { name: (c) => c.name, id: (c) => c.id, zone: (c) => c.zone, phone: (c) => phoneOf(c)?.waNumber || "" };
     function drawTable() {
-      const rows = visible(), shown = rows.slice(0, 300);
+      const dup = new Map();
+      clients.forEach((c) => { const k = nameKey(c.name); dup.set(k, (dup.get(k) || 0) + 1); });
+      const get = SORT[v.sortKey];
+      const rows = visible().sort((a, b) => v.sortDir * String(get(a)).localeCompare(String(get(b)), "es", { sensitivity: "base", numeric: true }));
+      const shown = rows.slice(0, 300);
       const allOn = rows.length > 0 && rows.every((c) => v.selected.has(c.uid));
+      const th = (key, label) => h("th", { "aria-sort": v.sortKey === key ? (v.sortDir > 0 ? "ascending" : "descending") : "none" },
+        h("button", { class: "sort-btn", type: "button", title: "Ordenar de A a Z / de Z a A", text: `${label}${v.sortKey === key ? (v.sortDir > 0 ? " ▲" : " ▼") : ""}`, onclick: () => { v.sortDir = v.sortKey === key ? -v.sortDir : 1; v.sortKey = key; drawTable(); } }));
       tableHost.replaceChildren(h("table", {},
-        h("thead", {}, h("tr", {}, h("th", {}, h("input", { type: "checkbox", "aria-label": "Seleccionar todos los que se ven", checked: allOn, onchange: (e) => { rows.forEach((c) => (e.target.checked ? v.selected.add(c.uid) : v.selected.delete(c.uid))); drawTable(); } })), ["Cliente", "ID", "Zona", "Teléfono"].map((t) => h("th", { text: t })))),
+        h("thead", {}, h("tr", {}, h("th", {}, h("input", { type: "checkbox", "aria-label": "Seleccionar todos los que se ven", checked: allOn, onchange: (e) => { rows.forEach((c) => (e.target.checked ? v.selected.add(c.uid) : v.selected.delete(c.uid))); drawTable(); } })), th("name", "Cliente"), th("id", "ID"), th("zone", "Zona"), th("phone", "Teléfono"))),
         h("tbody", {}, shown.map((c) => {
-          const ph = c.contacts.map((ct) => ({ ct, r: validatePhone(ct.phone, S().config.defaultCountryCode) })).find((x) => x.r.ok);
+          const ph = phoneOf(c);
           return h("tr", {}, h("td", {}, h("input", { type: "checkbox", "aria-label": `Seleccionar ${c.name}`, checked: v.selected.has(c.uid), onchange: (e) => { e.target.checked ? v.selected.add(c.uid) : v.selected.delete(c.uid); countOut.textContent = String(v.selected.size); } })),
-            h("td", { text: c.name }), h("td", { text: c.id || "—" }), h("td", { text: c.zone || "—" }), h("td", {}, ph ? `+${ph.r.waNumber}` : h("span", { class: "badge warn", text: "Sin teléfono" })));
+            h("td", {}, c.name, dup.get(nameKey(c.name)) > 1 ? h("span", { class: "badge warn", style: "margin-left:.5rem", text: "Repetido" }) : null), h("td", { text: c.id || "—" }), h("td", { text: c.zone || "—" }), h("td", {}, ph ? `+${ph.waNumber}` : h("span", { class: "badge warn", text: "Sin teléfono" })));
         }))));
       if (rows.length > shown.length) tableHost.append(h("p", { class: "hint", style: "padding:.5rem", text: `Se muestran ${shown.length} de ${rows.length}. Afina la búsqueda; «seleccionar todos» marca los ${rows.length}.` }));
       countOut.textContent = String(v.selected.size);
