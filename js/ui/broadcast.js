@@ -1,4 +1,4 @@
-import { h, field, toast, confirmDialog, download, insertAtCursor } from "./dom.js";
+import { h, field, toast, confirmDialog, openDialog, download, insertAtCursor } from "./dom.js";
 import { openImport } from "./clients.js";
 import { VARIABLES, whatsappUrl, buildValues, renderTemplate } from "../core/templates.js";
 import { normalizeText, nameKey, uid, validatePhone, todayBogota } from "../core/util.js";
@@ -288,28 +288,62 @@ export function renderBroadcast(root, ctx) {
             h("h2", { id: "h-cur", text: `Siguiente: ${cur.name}` }),
             h("p", { class: "hint", text: `+${cur.waNumber} · redacción ${String.fromCharCode(64 + cur.variant)}` }),
             h("textarea", { rows: 8, "aria-label": "Mensaje para este cliente", value: cur.text, oninput: (e) => { cur.text = e.target.value; mut((r) => { r.items.find((i) => i.uid === cur.uid).text = e.target.value; }); } }),
+            blob ? h("div", { class: "alert warn", role: "note" }, h("strong", { text: `Este comunicado lleva ${mediaWord()}. ` }), `WhatsApp no la adjunta sola: al pulsar «Abrir WhatsApp» ${isImage() ? "se copia la imagen y debes pegarla en el chat (⌘V / Ctrl+V)" : "debes adjuntar el video con el clip 📎"} ANTES de enviar. Si no, el cliente recibe solo el texto.`) : null,
             blob ? h("div", { class: "actions" },
               blob.type.startsWith("image/") ? h("button", { class: "btn btn-secondary", type: "button", text: "Copiar imagen", onclick: async () => { try { await copyImageToClipboard(blob); toast("Imagen copiada: pégala en el chat con Ctrl+V (⌘V en Mac)"); } catch (e) { toast(e.message, "err", 6000); } } }) : null,
               h("button", { class: "btn btn-ghost", type: "button", text: `Descargar ${blob.type.startsWith("image/") ? "imagen" : "video"}`, onclick: () => download(blob, run.media.name, blob.type) }),
               canShareFile(new File([blob], run.media.name, { type: blob.type })) ? h("button", { class: "btn btn-ghost", type: "button", text: "Compartir…", onclick: () => navigator.share({ files: [new File([blob], run.media.name, { type: blob.type })], text: cur.text }).catch(() => {}) }) : null) : null,
             h("div", { class: "actions" },
-              h("button", { class: "btn btn-primary", type: "button", id: "bcOpen", text: wait ? `Espera ${wait} s…` : "Abrir WhatsApp", disabled: wait > 0, onclick: () => window.open(whatsappUrl(cur.waNumber, cur.text), "_blank", "noopener") }),
+              h("button", { class: "btn btn-primary", type: "button", id: "bcOpen", text: wait ? `Espera ${wait} s…` : "Abrir WhatsApp", disabled: wait > 0, onclick: () => openChat(cur.waNumber, cur.text) }),
               h("button", { class: "btn btn-secondary", type: "button", text: "✓ Ya lo envié", onclick: () => markSent(cur) }),
               h("button", { class: "btn btn-ghost", type: "button", text: "Omitir", onclick: () => { mut((r) => { r.items.find((i) => i.uid === cur.uid).status = "skipped"; }); paint(); } })),
             blob ? h("p", { class: "hint", text: "Pasos: 1) «Abrir WhatsApp»; 2) pega la imagen con Ctrl+V (o adjunta el video con el clip 📎) en esa conversación; 3) envía; 4) vuelve aquí y pulsa «Ya lo envié». Prueba primero con un cliente tuyo para ver cómo queda el texto junto al archivo." }) : h("p", { class: "hint", text: "Pasos: «Abrir WhatsApp», envía el mensaje y vuelve a pulsar «Ya lo envié»." }),
             h("div", { class: "check" }, logChk, h("label", { for: "bcLog", text: "Anotar el contacto en Seguimiento comercial" }))),
         h("section", { class: "card" }, h("h3", { text: "Cola" }),
           h("div", { class: "table-wrap", style: "max-height:300px;overflow:auto" }, h("table", {}, h("tbody", {}, run.items.map((i) => h("tr", {}, h("td", { text: i.name }), h("td", { text: `+${i.waNumber}` }), h("td", { text: String.fromCharCode(64 + i.variant) }),
-            h("td", {}, h("span", { class: `badge ${i.status === "sent" ? "ok" : i.status === "skipped" ? "warn" : ""}`, text: { sent: "Enviado", skipped: "Omitido", pending: "Pendiente" }[i.status] }))))))),
+            h("td", {}, h("span", { class: `badge ${i.noMedia ? "err" : i.status === "sent" ? "ok" : i.status === "skipped" ? "warn" : ""}`, text: i.noMedia ? "Enviado sin archivo" : { sent: "Enviado", skipped: "Omitido", pending: "Pendiente" }[i.status] }),
+              i.noMedia && blob ? [" ", h("button", { class: "btn btn-secondary btn-sm", type: "button", text: `Enviar ${isImage() ? "imagen" : "video"}`, onclick: () => resendMedia(i) })] : null)))))),
           h("div", { class: "actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Exportar resultado (CSV)", onclick: () => exportCsv(run) }))));
     }
 
-    function markSent(cur) {
+    const isImage = () => !!blob && blob.type.startsWith("image/");
+    const mediaWord = () => (isImage() ? "la imagen" : "el video");
+    /** Con imagen, se copia al portapapeles ANTES de abrir el chat (el navegador solo deja copiar mientras esta pestaña tiene el foco). */
+    async function openChat(waNumber, text, { withText = true } = {}) {
+      if (isImage()) {
+        try { await copyImageToClipboard(blob); toast("Imagen copiada ✓ En WhatsApp pulsa ⌘V (Mac) o Ctrl+V (Windows) para pegarla antes de enviar.", "ok", 9000); }
+        catch (e) { toast(`${e.message} Descárgala y adjúntala con el clip 📎.`, "err", 9000); }
+      } else if (blob) toast("Adjunta el video con el clip 📎 (usa «Descargar video» si no lo tienes a la mano).", "info", 9000);
+      window.open(whatsappUrl(waNumber, withText ? text : ""), "_blank", "noopener");
+    }
+    /** Pregunta cómo salió el mensaje, para no dar por enviado algo que salió sin la foto. */
+    function askMedia() {
+      return new Promise((resolve) => {
+        const done = (val) => { dlg.close(); resolve(val); };
+        const dlg = openDialog("¿Salió con " + mediaWord() + "?", h("div", {},
+          h("p", { text: `WhatsApp no adjunta ${mediaWord()} por sí solo. Confirma cómo quedó el mensaje en el chat.` }),
+          h("div", { class: "actions end" },
+            h("button", { class: "btn btn-ghost", type: "button", text: "Volver", onclick: () => done(null) }),
+            h("button", { class: "btn btn-danger", type: "button", text: "Salió sin " + (isImage() ? "imagen" : "video"), onclick: () => done("no") }),
+            h("button", { class: "btn btn-primary", type: "button", text: "Sí, con " + (isImage() ? "imagen" : "video"), onclick: () => done("yes") }))));
+        dlg.addEventListener("close", () => resolve(null), { once: true });
+      });
+    }
+    async function resendMedia(item) {
+      await openChat(item.waNumber, "", { withText: false });
+      if (await confirmDialog({ title: `¿Ya enviaste ${mediaWord()}?`, message: `Se abrió el chat de ${item.name} sin texto. Pega ${mediaWord()}, envíala y confirma aquí.`, confirmText: "Sí, ya la envié", cancelText: "Aún no" })) {
+        mut((r) => { r.items.find((i) => i.uid === item.uid).noMedia = false; }); paint();
+      }
+    }
+
+    async function markSent(cur) {
+      let noMedia = false;
+      if (blob) { const ans = await askMedia(); if (!ans) return; noMedia = ans === "no"; }
       const run = get();
       const delay = nextDelaySeconds(run.pace.minDelay, run.pace.maxDelay);
       const now = new Date();
       mut((r, d) => {
-        r.items.find((i) => i.uid === cur.uid).status = "sent"; r.items.find((i) => i.uid === cur.uid).sentAt = now.toISOString();
+        const it = r.items.find((i) => i.uid === cur.uid); it.status = "sent"; it.sentAt = now.toISOString(); it.noMedia = noMedia;
         r.nextAt = Date.now() + delay * 1000;
         const c = d.clients.find((x) => x.uid === cur.uid);
         if (logChk.checked && c) {
@@ -326,7 +360,7 @@ export function renderBroadcast(root, ctx) {
 
     function exportCsv(run) {
       const q = (s) => `"${String(s).replace(/"/g, '""')}"`;
-      const rows = [["Cliente", "Teléfono", "Redacción", "Estado", "Enviado el"], ...run.items.map((i) => [i.name, `+${i.waNumber}`, String.fromCharCode(64 + i.variant), i.status, i.sentAt])];
+      const rows = [["Cliente", "Teléfono", "Redacción", "Estado", "Enviado el", "Salió sin archivo"], ...run.items.map((i) => [i.name, `+${i.waNumber}`, String.fromCharCode(64 + i.variant), i.status, i.sentAt, i.noMedia ? "SÍ" : ""])];
       download("﻿" + rows.map((r) => r.map(q).join(",")).join("\r\n"), `${run.name.replace(/[^\w-]+/g, "_")}.csv`, "text/csv;charset=utf-8");
     }
 

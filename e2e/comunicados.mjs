@@ -72,10 +72,16 @@ check("Muestra el botón de copiar imagen", await p.evaluate(() => [...document.
 await clickText("Abrir WhatsApp");
 const url = await p.evaluate(() => window.__opened[0] || "");
 check("Abre WhatsApp con el número y el texto", url.includes(`phone=${run.items[0].waNumber}`) && url.includes(encodeURIComponent(run.items[0].text.slice(0, 12))), url);
+check("Con imagen se muestra el aviso de pegarla", await p.evaluate(() => /no la adjunta sola/.test(document.querySelector("main").textContent)));
 await clickText("✓ Ya lo envié");
+check("Al marcar enviado pregunta si salió con imagen", await p.evaluate(() => /¿Salió con la imagen\?/.test(document.querySelector("dialog")?.textContent || "")));
+await clickText("Sí, con imagen");
 const after = await p.evaluate(() => ({ st: window.__pibox.store.state.runs[0].items[0].status, nextAt: window.__pibox.store.state.runs[0].nextAt, btn: document.querySelector("#bcOpen")?.disabled, fu: Object.keys(window.__pibox.store.state.followups).length }));
 check("Marcar enviado inicia la pausa y deshabilita el botón", after.st === "sent" && after.nextAt > Date.now() && after.btn === true, JSON.stringify(after));
 check("Se anota en Seguimiento comercial", after.fu === 1);
+await clickText("✓ Ya lo envié"); await clickText("Salió sin imagen");
+const miss = await p.evaluate(() => ({ flag: window.__pibox.store.state.runs[0].items[1].noMedia, btn: [...document.querySelectorAll("button")].some((x) => x.textContent === "Enviar imagen"), first: window.__pibox.store.state.runs[0].items[0].noMedia }));
+check("«Salió sin imagen» queda marcado y ofrece reenviar la imagen", miss.flag === true && miss.btn && miss.first === false, JSON.stringify(miss));
 check("Sin barra de scroll horizontal", await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
 check("Sin errores de consola", errs.length === 0, errs.join(" | "));
 console.log(results.map((r) => `${r[0]}  ${r[1]}${r[2] ? "\n      → " + r[2] : ""}`).join("\n"));
