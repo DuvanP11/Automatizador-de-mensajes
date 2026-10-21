@@ -32,6 +32,7 @@ await p.type("main input[type=text]", "Aviso de octubre");
 check("Cargar ejemplo llena 2 redacciones", (await clickText("Cargar ejemplo")) && (await p.$$eval("main .variant textarea", (a) => a.length)) === 2);
 await (await p.$('main input[type=file]')).uploadFile(png); await sleep(500);
 check("La imagen adjunta se previsualiza (CSP permite blob:)", await p.evaluate(() => { const i = document.querySelector("img.media-prev"); return !!i && i.complete && i.naturalWidth > 0; }));
+check("La vista previa muestra una burbuja por redacción, con imagen y sin llaves", await p.evaluate(() => { const b = [...document.querySelectorAll(".wa-bubble")]; return b.length === 2 && b.every((x) => x.querySelector("img") && x.textContent.trim().length > 20 && !x.textContent.includes("{{")); }));
 check("Guardar comunicado funciona", await clickText("Guardar comunicado") && await p.evaluate(() => window.__pibox.store.state.broadcasts.length === 1));
 check("La imagen se guardó en IndexedDB", await p.evaluate(() => new Promise((res) => { const r = indexedDB.open("pibox_media_v1"); r.onsuccess = () => { const g = r.result.transaction("files").objectStore("files").getAll(); g.onsuccess = () => res(g.result.length === 1); }; })));
 await p.evaluate(() => { document.querySelector("#bcPhone").click(); }); await sleep(100); // quita "solo con teléfono" para ver el total

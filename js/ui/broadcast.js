@@ -1,6 +1,6 @@
 import { h, field, toast, confirmDialog, download, insertAtCursor } from "./dom.js";
 import { openImport } from "./clients.js";
-import { VARIABLES, whatsappUrl } from "../core/templates.js";
+import { VARIABLES, whatsappUrl, buildValues, renderTemplate } from "../core/templates.js";
 import { normalizeText, nameKey, uid, validatePhone, todayBogota } from "../core/util.js";
 import { newFollowup, updateFollowup, stageOf } from "../core/followup.js";
 import { MAX_VARIANTS, DEFAULT_PACE, newBroadcast, validateMedia, planRecipients, buildRunItems, newRun, nextDelaySeconds, sentTodayCount, runProgress, currentItem } from "../core/broadcast.js";
@@ -35,14 +35,17 @@ export function renderBroadcast(root, ctx) {
 
     // --- archivo adjunto ---
     const mediaBox = h("div", { class: "media-box" });
+    const previewBox = h("section", { class: "card", "aria-labelledby": "h-pv" });
+    let pvMedia = null;
     async function drawMedia() {
-      mediaBox.replaceChildren();
+      mediaBox.replaceChildren(); pvMedia = null;
       let blob = mediaFile;
       if (!blob && draft.media) { try { blob = await getMedia(draft.id); } catch { /* sin archivo guardado */ } }
       if (blob) {
         if (previewUrl) URL.revokeObjectURL(previewUrl);
         previewUrl = URL.createObjectURL(blob);
         const isVideo = (draft.media?.type || blob.type).startsWith("video/");
+        pvMedia = { src: previewUrl, isVideo };
         mediaBox.append(
           isVideo ? h("video", { src: previewUrl, controls: true, preload: "metadata", class: "media-prev" }) : h("img", { src: previewUrl, alt: "Vista previa del archivo adjunto", class: "media-prev" }),
           h("div", { class: "hint", text: `${draft.media.name} · ${(draft.media.size / 1048576).toFixed(1)} MB` }),
@@ -50,6 +53,26 @@ export function renderBroadcast(root, ctx) {
       } else if (draft.media) {
         mediaBox.append(h("div", { class: "alert warn", text: "El archivo de este comunicado ya no está en este navegador. Vuelve a adjuntarlo." }));
       }
+      drawPreview();
+    }
+
+    // Vista previa: cómo le llegaría a un cliente (el primero marcado; si no hay, el primero de la base), una burbuja por redacción.
+    function drawPreview() {
+      const sample = clients.find((c) => v.selected.has(c.uid)) || clients.find(hasPhone) || clients[0];
+      const contact = sample?.contacts.find((ct) => ct.primary) || sample?.contacts[0];
+      const values = buildValues({ config: S().config, client: { name: sample?.name || "Nombre del cliente", id: sample?.id || "" }, contact: { name: contact?.name || "" }, zone: sample?.zone || "" });
+      const bodies = draft.variants.filter((x) => x.body.trim());
+      previewBox.replaceChildren(
+        h("h2", { id: "h-pv", text: "Así se verá el mensaje" }),
+        h("p", { class: "hint", text: sample ? `Con los datos de «${sample.name}»${v.selected.has(sample?.uid) ? "" : " (ejemplo; al marcar clientes se usa el primero marcado)"}. Cada cliente recibe una de estas redacciones, alternadas.` : "Escribe una redacción para verla aquí." }),
+        !bodies.length ? h("div", { class: "empty" }, "Todavía no hay texto que mostrar.") : h("div", { class: "pv-grid" }, bodies.map((x) => {
+          const i = draft.variants.indexOf(x);
+          const out = renderTemplate(x.body, values, { seed: i, emojis: S().config.emojis.enabled });
+          return h("div", {}, h("div", { class: "hint", text: `Redacción ${String.fromCharCode(65 + i)}` }),
+            h("div", { class: "wa-bubble" },
+              pvMedia ? (pvMedia.isVideo ? h("video", { src: pvMedia.src, controls: true, preload: "metadata" }) : h("img", { src: pvMedia.src, alt: "Archivo adjunto" })) : null,
+              h("div", { class: "wa-text", text: out.text })));
+        })));
     }
     const fileIn = h("input", { type: "file", accept: "image/jpeg,image/png,image/webp,video/mp4,video/3gpp,video/quicktime", onchange: (e) => {
       const f = e.target.files[0]; e.target.value = "";
@@ -64,8 +87,8 @@ export function renderBroadcast(root, ctx) {
     function drawVariants() {
       varBox.replaceChildren(...draft.variants.map((va, i) => h("div", { class: "variant" },
         h("div", { class: "panel-title" }, h("label", { for: `bv${i}`, text: `Redacción ${String.fromCharCode(65 + i)}` }),
-          draft.variants.length > 1 ? h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Quitar", onclick: () => { draft.variants.splice(i, 1); drawVariants(); } }) : null),
-        h("textarea", { id: `bv${i}`, rows: 6, placeholder: "Escribe el comunicado. Puedes usar variables como {{nombre_cliente}}.", value: va.body, oninput: (e) => { va.body = e.target.value; } }),
+          draft.variants.length > 1 ? h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Quitar", onclick: () => { draft.variants.splice(i, 1); drawVariants(); drawPreview(); } }) : null),
+        h("textarea", { id: `bv${i}`, rows: 6, placeholder: "Escribe el comunicado. Puedes usar variables como {{nombre_cliente}}.", value: va.body, oninput: (e) => { va.body = e.target.value; drawPreview(); } }),
         h("div", { class: "chips" }, ["nombre_cliente", "nombre_contacto", "saludo", "nombre_comercial", "zona"].map((k) => h("button", { class: "chip", type: "button", text: `{{${k}}}`, title: VARIABLES.find((x) => x.key === k)?.label, onclick: () => insertAtCursor(varBox.querySelector(`#bv${i}`), `{{${k}}}`) }))))));
     }
 
@@ -106,11 +129,12 @@ export function renderBroadcast(root, ctx) {
         h("thead", {}, h("tr", {}, h("th", {}, h("input", { type: "checkbox", "aria-label": "Seleccionar todos los que se ven", checked: allOn, onchange: (e) => { rows.forEach((c) => (e.target.checked ? v.selected.add(c.uid) : v.selected.delete(c.uid))); drawTable(); } })), th("name", "Cliente"), th("id", "ID"), th("zone", "Zona"), th("phone", "Teléfono"))),
         h("tbody", {}, shown.map((c) => {
           const ph = phoneOf(c);
-          return h("tr", {}, h("td", {}, h("input", { type: "checkbox", "aria-label": `Seleccionar ${c.name}`, checked: v.selected.has(c.uid), onchange: (e) => { e.target.checked ? v.selected.add(c.uid) : v.selected.delete(c.uid); countOut.textContent = String(v.selected.size); } })),
+          return h("tr", {}, h("td", {}, h("input", { type: "checkbox", "aria-label": `Seleccionar ${c.name}`, checked: v.selected.has(c.uid), onchange: (e) => { e.target.checked ? v.selected.add(c.uid) : v.selected.delete(c.uid); countOut.textContent = String(v.selected.size); drawPreview(); } })),
             h("td", {}, c.name, dup.get(nameKey(c.name)) > 1 ? h("span", { class: "badge warn", style: "margin-left:.5rem", text: "Repetido" }) : null), h("td", { text: c.id || "—" }), h("td", { text: c.zone || "—" }), h("td", {}, ph ? `+${ph.waNumber}` : h("span", { class: "badge warn", text: "Sin teléfono" })));
         }))));
       if (rows.length > shown.length) tableHost.append(h("p", { class: "hint", style: "padding:.5rem", text: `Se muestran ${shown.length} de ${rows.length}. Afina la búsqueda; «seleccionar todos» marca los ${rows.length}.` }));
       countOut.textContent = String(v.selected.size);
+      drawPreview();
     }
 
     const paceIn = (key, label, min, hint) => field(label, h("input", { type: "number", min, value: v.pace[key], oninput: (e) => { v.pace[key] = Number(e.target.value); } }), hint);
@@ -155,10 +179,11 @@ export function renderBroadcast(root, ctx) {
         h("p", { class: "hint", text: "Cada cliente recibe una redacción distinta a la del anterior. Escribe 2 o más versiones con las mismas ideas pero otras palabras; dentro de cada una puedes usar [[Hola|Buen día]] para variar frases." }),
         varBox,
         h("div", { class: "actions" },
-          h("button", { class: "btn btn-secondary btn-sm", type: "button", text: "+ Agregar redacción", onclick: () => { if (draft.variants.length >= MAX_VARIANTS) return toast(`Máximo ${MAX_VARIANTS} redacciones`, "err"); draft.variants.push({ id: uid("v"), body: "" }); drawVariants(); } }),
-          h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Cargar ejemplo", onclick: () => { draft.variants = SAMPLE.map(([a, b], i) => ({ id: `v${i + 1}`, body: `${a}\n\n${b}` })); drawVariants(); } }),
+          h("button", { class: "btn btn-secondary btn-sm", type: "button", text: "+ Agregar redacción", onclick: () => { if (draft.variants.length >= MAX_VARIANTS) return toast(`Máximo ${MAX_VARIANTS} redacciones`, "err"); draft.variants.push({ id: uid("v"), body: "" }); drawVariants(); drawPreview(); } }),
+          h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Cargar ejemplo", onclick: () => { draft.variants = SAMPLE.map(([a, b], i) => ({ id: `v${i + 1}`, body: `${a}\n\n${b}` })); drawVariants(); drawPreview(); } }),
           h("button", { class: "btn btn-primary btn-sm", type: "button", text: "Guardar comunicado", onclick: async () => { if (await saveDraft()) { toast("Comunicado guardado"); draw(); } } }),
           !unsaved ? h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Eliminar", onclick: remove }) : null)),
+      previewBox,
       h("section", { class: "card", "aria-labelledby": "h-c2" },
         h("div", { class: "panel-title" }, h("h2", { id: "h-c2", text: "2 · Clientes que lo recibirán" }), h("button", { class: "btn btn-secondary btn-sm", type: "button", text: "Adjuntar clientes y teléfonos desde Excel", onclick: () => openImport(ctx, () => draw()) })),
         h("div", { class: "row" },

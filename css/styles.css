@@ -250,3 +250,7 @@ ul.plain { margin: 0; padding-left: 1.2rem; } ul.plain li { margin-bottom: .3rem
 ul.plain { list-style: none; margin: 0; padding: 0; } ul.plain li { padding: .4rem 0; border-top: 1px solid var(--border); }
 .sort-btn { font: inherit; font-weight: 700; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; }
 .sort-btn:hover { text-decoration: underline; }
+.pv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+.wa-bubble { background: var(--ok-bg); border: 1px solid var(--ok); border-radius: 12px 12px 12px 2px; padding: .35rem; max-width: 380px; }
+.wa-bubble img, .wa-bubble video { display: block; width: 100%; border-radius: 8px; margin-bottom: .35rem; }
+.wa-text { white-space: pre-wrap; font-size: .92rem; padding: .25rem .45rem .4rem; overflow-wrap: anywhere; }
