@@ -296,7 +296,8 @@ export function renderBroadcast(root, ctx) {
         h("section", { class: "card" },
           h("div", { class: "panel-title" }, h("h2", { text: run.name }), h("span", { class: "badge", text: `${p.sent} enviados · ${p.skipped} omitidos · ${p.pending} pendientes` })),
           h("progress", { max: p.total, value: p.sent + p.skipped, style: "width:100%", "aria-label": "Avance del envío" }),
-          h("p", { class: "hint", text: `Hoy: ${today} de ${cap} permitidos.` })),
+          h("p", { class: "hint", text: `Hoy: ${today} de ${cap} permitidos.` }),
+          p.pending ? h("div", { class: "actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Regenerar textos pendientes", title: "Vuelve a sortear la redacción de los clientes que faltan, usando el comunicado guardado (con sus frases intercambiables).", onclick: regenTexts })) : null),
         !cur ? h("div", { class: "alert ok", text: "Terminaste la cola. Todos los clientes fueron enviados u omitidos." })
           : capHit ? h("div", { class: "alert warn", text: `Llegaste al tope de ${cap} envíos de hoy. Continúa mañana desde «Envíos preparados»: lo pendiente se conserva.` })
           : h("section", { class: "card", "aria-labelledby": "h-cur" },
@@ -349,6 +350,20 @@ export function renderBroadcast(root, ctx) {
       if (await confirmDialog({ title: `¿Ya enviaste ${mediaWord()}?`, message: `Se abrió el chat de ${item.name} sin texto. Pega ${mediaWord()}, envíala y confirma aquí.`, confirmText: "Sí, ya la envié", cancelText: "Aún no" })) {
         mut((r) => { r.items.find((i) => i.uid === item.uid).noMedia = false; }); paint();
       }
+    }
+
+    /** Los textos se generan al preparar la cola. Si luego se mejoró el comunicado, esto vuelve a sortearlos solo para los pendientes. */
+    async function regenTexts() {
+      const run = get(), bc = S().broadcasts.find((b) => b.id === run.broadcastId);
+      if (!bc) { toast("El comunicado de esta cola ya no existe; no hay de dónde regenerar.", "err", 5000); return; }
+      const pending = run.items.filter((i) => i.status === "pending");
+      if (!(await confirmDialog({ title: "Regenerar textos", message: `Se volverá a redactar el mensaje de los ${pending.length} clientes pendientes con el comunicado «${bc.name}» tal como está guardado ahora (guárdalo primero si acabas de cambiarlo). Se pierden las ediciones manuales de esos mensajes. Los ya enviados no cambian.`, confirmText: "Regenerar" }))) return;
+      const recipients = pending.map((i) => { const c = S().clients.find((x) => x.uid === i.uid); const ct = c?.contacts.find((x) => x.primary) || c?.contacts[0]; return { uid: i.uid, name: i.name, id: c?.id || "", zone: c?.zone || "", contactName: ct?.name || "", waNumber: i.waNumber }; });
+      let built;
+      try { built = buildRunItems({ recipients, variants: bc.variants, config: S().config }); } catch (e) { toast(e.message, "err"); return; }
+      const byUid = new Map(built.items.map((x) => [x.uid, x]));
+      mut((r) => { r.items.forEach((i) => { const n = byUid.get(i.uid); if (i.status === "pending" && n) { i.text = n.text; i.variant = n.variant; } }); });
+      paint(); toast(`Textos regenerados: ${built.distinct} combinaciones distintas entre ${pending.length} clientes.`);
     }
 
     async function markSent(cur) {
