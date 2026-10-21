@@ -3,7 +3,7 @@ import { openImport } from "./clients.js";
 import { VARIABLES, whatsappUrl, buildValues, renderTemplate } from "../core/templates.js";
 import { normalizeText, nameKey, uid, validatePhone, todayBogota } from "../core/util.js";
 import { newFollowup, updateFollowup, stageOf } from "../core/followup.js";
-import { MAX_VARIANTS, DEFAULT_PACE, sanitizePace, countCombos, suggestAlternatives, parseManualLines, addManualClients, estimateRun, riskForDaily, SAME_DAY_GUIDE, newBroadcast, validateMedia, planRecipients, buildRunItems, newRun, nextDelaySeconds, sentTodayCount, runProgress, currentItem } from "../core/broadcast.js";
+import { MAX_VARIANTS, DEFAULT_PACE, sanitizePace, effectiveBodies, countCombos, suggestAlternatives, parseManualLines, addManualClients, estimateRun, riskForDaily, SAME_DAY_GUIDE, newBroadcast, validateMedia, planRecipients, buildRunItems, newRun, nextDelaySeconds, sentTodayCount, runProgress, currentItem } from "../core/broadcast.js";
 import { putMedia, getMedia, deleteMedia, copyImageToClipboard, canShareFile } from "./media-db.js";
 
 const SAMPLE = [["{{saludo}} {{nombre_cliente}} 👋", "Te compartimos un comunicado importante de Pibox."], ["[[Hola|Buen día|Qué tal]] {{nombre_cliente}}", "Queremos contarte una novedad de Pibox."]];
@@ -38,7 +38,7 @@ export function renderBroadcast(root, ctx) {
     // --- archivo adjunto ---
     const mediaBox = h("div", { class: "media-box" });
     const previewBox = h("section", { class: "card", "aria-labelledby": "h-pv" });
-    let pvMedia = null;
+    let pvMedia = null, pvSeed = 0;
     async function drawMedia() {
       mediaBox.replaceChildren(); pvMedia = null;
       let blob = mediaFile;
@@ -63,13 +63,13 @@ export function renderBroadcast(root, ctx) {
       const sample = clients.find((c) => recipientUids().includes(c.uid)) || clients.find(hasPhone) || clients[0];
       const contact = sample?.contacts.find((ct) => ct.primary) || sample?.contacts[0];
       const values = buildValues({ config: S().config, client: { name: sample?.name || "Nombre del cliente", id: sample?.id || "" }, contact: { name: contact?.name || "" }, zone: sample?.zone || "" });
-      const bodies = draft.variants.filter((x) => x.body.trim());
+      const bodies = draft.variants.filter((x) => x.body.trim()).map((x) => ({ ...x, eff: draft.autoVary !== false ? suggestAlternatives(x.body).text : x.body }));
       previewBox.replaceChildren(
-        h("h2", { id: "h-pv", text: "Así se verá el mensaje" }),
+        h("div", { class: "panel-title" }, h("h2", { id: "h-pv", text: "Así se verá el mensaje" }), h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "🔀 Ver otro ejemplo", title: "Cada cliente recibe una combinación distinta de frases; esto muestra otra.", onclick: () => { pvSeed += 1; drawPreview(); } })),
         h("p", { class: "hint", text: sample ? `Con los datos de «${sample.name}»${recipientUids().includes(sample?.uid) ? "" : " (ejemplo; al marcar clientes se usa el primero marcado)"}. Cada cliente recibe una de estas redacciones, alternadas.` : "Escribe una redacción para verla aquí." }),
         !bodies.length ? h("div", { class: "empty" }, "Todavía no hay texto que mostrar.") : h("div", { class: "pv-grid" }, bodies.map((x) => {
           const i = draft.variants.indexOf(x);
-          const out = renderTemplate(x.body, values, { seed: i, emojis: S().config.emojis.enabled });
+          const out = renderTemplate(x.eff, values, { seed: i + pvSeed, emojis: S().config.emojis.enabled });
           return h("div", {}, h("div", { class: "hint", text: `Redacción ${String.fromCharCode(65 + i)}` }),
             h("div", { class: "wa-bubble" },
               pvMedia ? (pvMedia.isVideo ? h("video", { src: pvMedia.src, controls: true, preload: "metadata" }) : h("img", { src: pvMedia.src, alt: "Archivo adjunto" })) : null,
@@ -90,7 +90,7 @@ export function renderBroadcast(root, ctx) {
       varBox.replaceChildren(...draft.variants.map((va, i) => {
         const combos = h("small", { class: "hint" });
         const area = h("textarea", { id: `bv${i}`, rows: 6, placeholder: "Escribe el comunicado. Puedes usar variables como {{nombre_cliente}}.", value: va.body, oninput: (e) => { va.body = e.target.value; setCombos(); drawPreview(); } });
-        const setCombos = () => { const n = countCombos(va.body); combos.textContent = n > 1 ? `Esta redacción puede salir de ${n.toLocaleString("es-CO")} formas distintas (frases intercambiables [[a|b]]).` : "Sin frases intercambiables: todos los clientes recibirían este mismo texto. Usa «Sugerir alternativas»."; combos.className = `hint ${n > 1 ? "" : "error-text"}`; };
+        const setCombos = () => { const n = countCombos(draft.autoVary !== false ? suggestAlternatives(va.body).text : va.body); combos.textContent = n > 1 ? `Esta redacción puede salir de ${n.toLocaleString("es-CO")} formas distintas${draft.autoVary !== false ? " (con la variación automática)" : ""}.` : "Sin frases intercambiables: todos los clientes recibirían este mismo texto. Escribe tus opciones con [[a|b]] o activa la variación automática."; combos.className = `hint ${n > 1 ? "" : "error-text"}`; };
         setCombos();
         return h("div", { class: "variant" },
           h("div", { class: "panel-title" }, h("label", { for: `bv${i}`, text: `Redacción ${String.fromCharCode(65 + i)}` }),
@@ -213,8 +213,8 @@ export function renderBroadcast(root, ctx) {
       const plan = planRecipients({ clients, uids: recipientUids(), followups: S().followups, statuses: S().config.statuses, countryCode: S().config.defaultCountryCode, skipNotInterested: v.skipNotInterested });
       if (!plan.ok.length) { toast("Ninguno de los clientes elegidos tiene un teléfono válido.", "err", 5000); return; }
       let built;
-      try { built = buildRunItems({ recipients: plan.ok, variants: draft.variants, config: S().config }); } catch (e) { toast(e.message, "err"); return; }
-      const possible = draft.variants.filter((x) => x.body.trim()).reduce((n, x) => n + countCombos(x.body), 0);
+      try { built = buildRunItems({ recipients: plan.ok, variants: draft.variants, config: S().config, autoVary: draft.autoVary !== false }); } catch (e) { toast(e.message, "err"); return; }
+      const possible = effectiveBodies(draft.variants, draft.autoVary !== false).reduce((n, b) => n + countCombos(b), 0);
       const lines = [`Se enviará a ${plan.ok.length} cliente(s), de a uno y con una pausa de ${v.pace.minDelay}–${v.pace.maxDelay} s entre cada envío.`];
       if (plan.skipped.length) lines.push(`Se omiten ${plan.skipped.length}: ${plan.skipped.slice(0, 4).map((s) => `${s.name} (${s.reason})`).join("; ")}${plan.skipped.length > 4 ? "…" : ""}.`);
       lines.push(`Textos distintos: ${built.distinct} combinaciones de redacción repartidas entre los clientes.`);
@@ -247,7 +247,8 @@ export function renderBroadcast(root, ctx) {
         field("Imagen o video (opcional)", fileIn, "JPG, PNG, WebP, MP4, 3GP o MOV; hasta 16 MB. Se guarda solo en este navegador."),
         mediaBox,
         h("h3", { text: "Redacciones" }),
-        h("p", { class: "hint", text: "Cada cliente recibe una redacción distinta a la del anterior. Escribe 2 o más versiones con las mismas ideas pero otras palabras; dentro de cada una puedes usar [[Hola|Buen día]] para variar frases." }),
+        h("div", { class: "check", style: "margin:.2rem 0 .6rem" }, h("input", { id: "bcAuto", type: "checkbox", checked: draft.autoVary !== false, onchange: (e) => { draft.autoVary = e.target.checked; drawVariants(); drawPreview(); } }), h("label", { for: "bcAuto", text: "Variar frases automáticamente (recomendado)" })),
+        h("p", { class: "hint", text: "Al preparar el envío, las frases comunes (saludos, «les compartimos», «alta demanda»…) se cambian al azar por equivalentes del mismo sentido, distinto para cada cliente. No cambia datos, cifras, fechas ni nombres. Cada cliente recibe una redacción distinta a la del anterior. Escribe 2 o más versiones con las mismas ideas pero otras palabras; dentro de cada una puedes usar [[Hola|Buen día]] para variar frases." }),
         varBox,
         h("div", { class: "actions" },
           h("button", { class: "btn btn-secondary btn-sm", type: "button", text: "+ Agregar redacción", onclick: () => { if (draft.variants.length >= MAX_VARIANTS) return toast(`Máximo ${MAX_VARIANTS} redacciones`, "err"); draft.variants.push({ id: uid("v"), body: "" }); drawVariants(); drawPreview(); } }),
@@ -360,7 +361,7 @@ export function renderBroadcast(root, ctx) {
       if (!(await confirmDialog({ title: "Regenerar textos", message: `Se volverá a redactar el mensaje de los ${pending.length} clientes pendientes con el comunicado «${bc.name}» tal como está guardado ahora (guárdalo primero si acabas de cambiarlo). Se pierden las ediciones manuales de esos mensajes. Los ya enviados no cambian.`, confirmText: "Regenerar" }))) return;
       const recipients = pending.map((i) => { const c = S().clients.find((x) => x.uid === i.uid); const ct = c?.contacts.find((x) => x.primary) || c?.contacts[0]; return { uid: i.uid, name: i.name, id: c?.id || "", zone: c?.zone || "", contactName: ct?.name || "", waNumber: i.waNumber }; });
       let built;
-      try { built = buildRunItems({ recipients, variants: bc.variants, config: S().config }); } catch (e) { toast(e.message, "err"); return; }
+      try { built = buildRunItems({ recipients, variants: bc.variants, config: S().config, autoVary: bc.autoVary !== false }); } catch (e) { toast(e.message, "err"); return; }
       const byUid = new Map(built.items.map((x) => [x.uid, x]));
       mut((r) => { r.items.forEach((i) => { const n = byUid.get(i.uid); if (i.status === "pending" && n) { i.text = n.text; i.variant = n.variant; } }); });
       paint(); toast(`Textos regenerados: ${built.distinct} combinaciones distintas entre ${pending.length} clientes.`);

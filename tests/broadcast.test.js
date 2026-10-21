@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateMedia, nextDelaySeconds, planRecipients, assignVariants, buildRunItems, newRun, sentTodayCount, runProgress, currentItem, MEDIA_LIMITS, sanitizePace, estimateRun, riskForDaily, SAME_DAY_GUIDE, parseManualLines, addManualClients, countCombos, suggestAlternatives } from "../js/core/broadcast.js";
+import { validateMedia, nextDelaySeconds, planRecipients, assignVariants, buildRunItems, newRun, sentTodayCount, runProgress, currentItem, MEDIA_LIMITS, sanitizePace, estimateRun, riskForDaily, SAME_DAY_GUIDE, parseManualLines, addManualClients, countCombos, suggestAlternatives, effectiveBodies } from "../js/core/broadcast.js";
 import { DEFAULT_CONFIG } from "../js/core/config.js";
 import { deepClone } from "../js/core/util.js";
 import { normalizeState } from "../js/core/store.js";
@@ -128,4 +128,15 @@ test("buildRunItems: cada grupo se sortea por separado y se evitan combinaciones
   assert.equal(new Set(items.map((i) => i.text.replace(/N\d/, ""))).size, 9);
   // con una sola combinación posible se acepta repetir sin colgarse
   assert.equal(buildRunItems({ recipients: recips, variants: [{ body: "Hola {{nombre_cliente}}" }], config: cfg() }).distinct, 1);
+});
+
+test("variación automática: sin [[ ]] escritos, igual salen textos distintos y con el mismo sentido", () => {
+  const body = "Les saluda {{nombre_comercial}}. Este viernes habrá alta demanda; les compartimos algunas recomendaciones el 31 de octubre.";
+  const recips = Array.from({ length: 30 }, (_, i) => ({ uid: `u${i}`, name: `N${i}`, id: "", zone: "", contactName: "", waNumber: `5730000000${i}` }));
+  const on = buildRunItems({ recipients: recips, variants: [{ body }], config: cfg(), autoVary: true });
+  const off = buildRunItems({ recipients: recips, variants: [{ body }], config: cfg(), autoVary: false });
+  assert.ok(new Set(on.items.map((i) => i.text)).size > 10);
+  assert.equal(new Set(off.items.map((i) => i.text)).size, 1);
+  on.items.forEach((i) => { assert.match(i.text, /31 de octubre/); assert.match(i.text, /Ana/); assert.ok(!i.text.includes("[[") && !i.text.includes("{{")); });
+  assert.equal(effectiveBodies([{ body: " " }, { body }], false).length, 1);
 });
