@@ -79,7 +79,7 @@ function cleanup(t) {
  * @returns {{text:string, missing:string[], unknown:string[], variantsUsed:number}}
  *  missing: variables obligatorias referenciadas que no tienen valor. unknown: variables inexistentes (se eliminan del texto).
  */
-export function renderTemplate(body, values, { seed = 0, emojis = true } = {}) {
+export function renderTemplate(body, values, { seed = 0, emojis = true, pick = null } = {}) {
   let t = String(body ?? "");
   // 1) Bloques condicionales (de adentro hacia afuera, repetimos hasta estabilizar).
   const sec = /\{\{([#^])\s*([a-z_]+)\s*\}\}([\s\S]*?)\{\{\/\s*\2\s*\}\}/;
@@ -94,7 +94,10 @@ export function renderTemplate(body, values, { seed = 0, emojis = true } = {}) {
   t = t.replace(/\[\[([^\]]+?)\]\]/g, (_, group) => {
     const opts = group.split("|").map((s) => s.trim()).filter(Boolean);
     if (!opts.length) return "";
-    return opts[(Math.abs(seed) + gi++ * 7) % opts.length];
+    // `pick(grupo, cuántas)` permite elegir al azar cada grupo por separado; sin él, la elección depende de `seed` (reproducible).
+    const idx = pick ? pick(gi, opts.length) : (Math.abs(seed) + gi * 7) % opts.length;
+    gi++;
+    return opts[idx];
   });
   // 3) Variables
   const missing = new Set(), unknown = new Set();

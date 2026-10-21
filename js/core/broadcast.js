@@ -79,19 +79,91 @@ export function assignVariants(count, nVariants, rand = Math.random) {
   return out.slice(0, count);
 }
 
-/** Texto final de cada destinatario. Cada variante es una plantilla completa (variables y [[a|b]] incluidos). */
+/** Cuántos textos distintos puede producir una redacción con sus grupos [[a|b|c]]. */
+export function countCombos(body) {
+  let n = 1;
+  for (const m of String(body ?? "").matchAll(/\[\[([^\]]+?)\]\]/g)) n *= Math.max(1, m[1].split("|").map((x) => x.trim()).filter(Boolean).length);
+  return n;
+}
+
+/**
+ * Texto final de cada destinatario. Cada variante es una plantilla completa (variables y [[a|b]] incluidos).
+ * Cada grupo [[a|b]] se sortea por separado para cada cliente, y se evita repetir la misma combinación mientras queden otras.
+ * @returns {{items:object[], warnings:string[], distinct:number}} distinct = combinaciones de redacción distintas usadas
+ */
 export function buildRunItems({ recipients, variants, config, now = new Date(), rand = Math.random }) {
   const bodies = variants.map((v) => v.body).filter((b) => b.trim());
   if (!bodies.length) throw new Error("Escribe al menos una redacción del comunicado.");
   const order = assignVariants(recipients.length, bodies.length, rand);
-  const warnings = new Set();
+  const warnings = new Set(), used = new Set();
   const items = recipients.map((r, i) => {
     const values = buildValues({ config, client: { name: r.name, id: r.id }, contact: { name: r.contactName }, zone: r.zone, now });
-    const out = renderTemplate(bodies[order[i]], values, { seed: i, emojis: config.emojis?.enabled !== false });
+    const room = countCombos(bodies[order[i]]); // si ya no quedan combinaciones nuevas, se acepta repetir
+    let out, sig;
+    for (let t = 0; t < 40; t++) {
+      const picks = [];
+      out = renderTemplate(bodies[order[i]], values, { seed: i, emojis: config.emojis?.enabled !== false, pick: (_g, n) => { const k = Math.floor(rand() * n); picks.push(k); return k; } });
+      sig = `${order[i]}:${picks.join(",")}`;
+      if (!used.has(sig) || room <= [...used].filter((u) => u.startsWith(`${order[i]}:`)).length) break;
+    }
+    used.add(sig);
     out.missing.forEach((k) => warnings.add(k));
     return { uid: r.uid, name: r.name, waNumber: r.waNumber, text: out.text, variant: order[i] + 1, status: "pending", sentAt: "" };
   });
-  return { items, warnings: [...warnings] };
+  return { items, warnings: [...warnings], distinct: used.size };
+}
+
+/**
+ * Sinónimos seguros para volver una redacción más variada sin cambiar su sentido.
+ * Cada grupo son formas equivalentes y con la misma concordancia gramatical (no se mezclan «les» y «te», ni masculino con femenino).
+ */
+export const SYNONYM_GROUPS = [
+  ["Les saluda", "Les escribe", "Les habla"],
+  ["Te saluda", "Te escribe", "Te habla"],
+  ["queremos compartirles", "queremos contarles", "queremos comentarles"],
+  ["queremos compartirte", "queremos contarte", "queremos comentarte"],
+  ["Les compartimos", "Les contamos", "Les comentamos"],
+  ["Te compartimos", "Te contamos", "Te comentamos"],
+  ["Quiero compartirles", "Quiero contarles", "Quiero comentarles"],
+  ["Quiero compartirte", "Quiero contarte", "Quiero comentarte"],
+  ["alta demanda", "gran demanda", "mucha demanda"],
+  ["algunas recomendaciones", "unas recomendaciones", "algunos consejos"],
+  ["para que sigan facturando", "para que puedan seguir facturando", "para que continúen facturando"],
+  ["para que sigas facturando", "para que puedas seguir facturando", "para que continúes facturando"],
+  ["¿Aún no", "¿Todavía no"],
+  ["Contáctenme", "Escríbanme", "Comuníquense conmigo"],
+  ["Contáctame", "Escríbeme", "Comunícate conmigo"],
+  ["les ayudo a gestionarla", "les ayudo a activarla", "con gusto les ayudo a gestionarla"],
+  ["te ayudo a gestionarla", "te ayudo a activarla", "con gusto te ayudo a gestionarla"],
+  ["Cualquier duda", "Ante cualquier duda", "Si tienen alguna duda"],
+  ["estamos atentos", "estamos pendientes", "quedamos atentos"],
+  ["con gusto", "encantado", "con mucho gusto"],
+];
+
+const escRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const capFirst = (x) => x.replace(/\p{L}/u, (c) => c.toUpperCase());
+const lowFirst = (x) => x.replace(/\p{L}/u, (c) => c.toLowerCase());
+
+/**
+ * Envuelve en [[a|b|c]] las frases que tienen sinónimos seguros. No toca variables {{…}} ni grupos [[…]] ya escritos.
+ * @returns {{text:string, groups:number}}
+ */
+export function suggestAlternatives(text) {
+  const members = SYNONYM_GROUPS.flatMap((g, gi) => g.map((m) => ({ m, gi }))).sort((a, b) => b.m.length - a.m.length);
+  const re = new RegExp(`(?<![\\p{L}\\p{N}])(?:${members.map((x) => escRe(x.m)).join("|")})(?![\\p{L}\\p{N}])`, "giu");
+  let groups = 0;
+  const out = String(text ?? "").split(/(\{\{[^}]*\}\}|\[\[[^\]]*\]\])/).map((seg) => {
+    if (/^(\{\{|\[\[)/.test(seg)) return seg;
+    return seg.replace(re, (hit) => {
+      const found = members.find((x) => x.m.toLowerCase() === hit.toLowerCase());
+      const upper = /^[¿¡]?\p{Lu}/u.test(hit);
+      const opts = SYNONYM_GROUPS[found.gi].map((o) => (upper ? capFirst(o) : lowFirst(o)));
+      const first = opts.findIndex((o) => o.toLowerCase() === hit.toLowerCase());
+      groups++;
+      return `[[${[hit, ...opts.filter((_, i) => i !== first)].join("|")}]]`;
+    });
+  }).join("");
+  return { text: out, groups };
 }
 
 export function newRun({ id, broadcast, items, pace, now = new Date().toISOString() }) {
