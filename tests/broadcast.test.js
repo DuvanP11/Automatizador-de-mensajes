@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateMedia, nextDelaySeconds, planRecipients, assignVariants, buildRunItems, newRun, sentTodayCount, runProgress, currentItem, MEDIA_LIMITS, sanitizePace, estimateRun, riskForDaily, SAME_DAY_GUIDE, parseManualLines, addManualClients } from "../js/core/broadcast.js";
+import { validateMedia, nextDelaySeconds, planRecipients, assignVariants, buildRunItems, newRun, sentTodayCount, runProgress, currentItem, MEDIA_LIMITS, sanitizePace, estimateRun, riskForDaily, SAME_DAY_GUIDE, parseManualLines, addManualClients, countCombos, suggestAlternatives } from "../js/core/broadcast.js";
 import { DEFAULT_CONFIG } from "../js/core/config.js";
 import { deepClone } from "../js/core/util.js";
 import { normalizeState } from "../js/core/store.js";
@@ -106,4 +106,26 @@ test("addManualClients: nuevo, mismo nombre suma teléfono, número ajeno no dup
   assert.deepEqual(r.rejected.map((x) => x.reason.split(":")[0].split(";")[0]), ["Ese número ya es de «Alfa»", "Teléfono no válido", "Falta el nombre", "Teléfono no válido"]);
   const again = addManualClients(base, [{ name: "Nuevo SAS", phone: "3205550000" }]);
   assert.equal(again.added, 0); assert.equal(base.length, 2); // repetir no duplica
+});
+
+test("suggestAlternatives: envuelve frases con sinónimos seguros, conserva mayúsculas y no toca variables ni grupos existentes", () => {
+  const r = suggestAlternatives("Les saluda {{nombre_comercial}}. Este viernes habrá alta demanda. [[Hola|Buen día]] ¿Aún no la tienen? Contáctenme.");
+  assert.equal(r.groups, 4);
+  assert.match(r.text, /\[\[Les saluda\|Les escribe\|Les habla\]\] \{\{nombre_comercial\}\}/);
+  assert.match(r.text, /\[\[alta demanda\|gran demanda\|mucha demanda\]\]/);
+  assert.match(r.text, /\[\[¿Aún no\|¿Todavía no\]\] la tienen/);
+  assert.match(r.text, /\[\[Hola\|Buen día\]\]/); // el grupo previo queda intacto
+  assert.equal(suggestAlternatives("Texto sin frases conocidas").groups, 0);
+  assert.equal(suggestAlternatives(r.text).text.includes("[[[["), false); // idempotente: no anida
+  assert.equal(countCombos(r.text), 3 * 3 * 2 * 2 * 3);
+});
+
+test("buildRunItems: cada grupo se sortea por separado y se evitan combinaciones repetidas", () => {
+  const body = "[[a|b|c]] [[x|y|z]] {{nombre_cliente}}";
+  const recips = Array.from({ length: 9 }, (_, i) => ({ uid: `u${i}`, name: `N${i}`, id: "", zone: "", contactName: "", waNumber: `57300000000${i}` }));
+  const { items, distinct } = buildRunItems({ recipients: recips, variants: [{ body }], config: cfg() });
+  assert.equal(distinct, 9); // 9 clientes, 9 combinaciones posibles: ninguna repetida
+  assert.equal(new Set(items.map((i) => i.text.replace(/N\d/, ""))).size, 9);
+  // con una sola combinación posible se acepta repetir sin colgarse
+  assert.equal(buildRunItems({ recipients: recips, variants: [{ body: "Hola {{nombre_cliente}}" }], config: cfg() }).distinct, 1);
 });

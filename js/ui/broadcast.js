@@ -3,7 +3,7 @@ import { openImport } from "./clients.js";
 import { VARIABLES, whatsappUrl, buildValues, renderTemplate } from "../core/templates.js";
 import { normalizeText, nameKey, uid, validatePhone, todayBogota } from "../core/util.js";
 import { newFollowup, updateFollowup, stageOf } from "../core/followup.js";
-import { MAX_VARIANTS, DEFAULT_PACE, sanitizePace, parseManualLines, addManualClients, estimateRun, riskForDaily, SAME_DAY_GUIDE, newBroadcast, validateMedia, planRecipients, buildRunItems, newRun, nextDelaySeconds, sentTodayCount, runProgress, currentItem } from "../core/broadcast.js";
+import { MAX_VARIANTS, DEFAULT_PACE, sanitizePace, countCombos, suggestAlternatives, parseManualLines, addManualClients, estimateRun, riskForDaily, SAME_DAY_GUIDE, newBroadcast, validateMedia, planRecipients, buildRunItems, newRun, nextDelaySeconds, sentTodayCount, runProgress, currentItem } from "../core/broadcast.js";
 import { putMedia, getMedia, deleteMedia, copyImageToClipboard, canShareFile } from "./media-db.js";
 
 const SAMPLE = [["{{saludo}} {{nombre_cliente}} 👋", "Te compartimos un comunicado importante de Pibox."], ["[[Hola|Buen día|Qué tal]] {{nombre_cliente}}", "Queremos contarte una novedad de Pibox."]];
@@ -87,11 +87,23 @@ export function renderBroadcast(root, ctx) {
     // --- redacciones alternas ---
     const varBox = h("div");
     function drawVariants() {
-      varBox.replaceChildren(...draft.variants.map((va, i) => h("div", { class: "variant" },
-        h("div", { class: "panel-title" }, h("label", { for: `bv${i}`, text: `Redacción ${String.fromCharCode(65 + i)}` }),
-          draft.variants.length > 1 ? h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Quitar", onclick: () => { draft.variants.splice(i, 1); drawVariants(); drawPreview(); } }) : null),
-        h("textarea", { id: `bv${i}`, rows: 6, placeholder: "Escribe el comunicado. Puedes usar variables como {{nombre_cliente}}.", value: va.body, oninput: (e) => { va.body = e.target.value; drawPreview(); } }),
-        h("div", { class: "chips" }, ["nombre_cliente", "nombre_contacto", "saludo", "nombre_comercial", "zona"].map((k) => h("button", { class: "chip", type: "button", text: `{{${k}}}`, title: VARIABLES.find((x) => x.key === k)?.label, onclick: () => insertAtCursor(varBox.querySelector(`#bv${i}`), `{{${k}}}`) }))))));
+      varBox.replaceChildren(...draft.variants.map((va, i) => {
+        const combos = h("small", { class: "hint" });
+        const area = h("textarea", { id: `bv${i}`, rows: 6, placeholder: "Escribe el comunicado. Puedes usar variables como {{nombre_cliente}}.", value: va.body, oninput: (e) => { va.body = e.target.value; setCombos(); drawPreview(); } });
+        const setCombos = () => { const n = countCombos(va.body); combos.textContent = n > 1 ? `Esta redacción puede salir de ${n.toLocaleString("es-CO")} formas distintas (frases intercambiables [[a|b]]).` : "Sin frases intercambiables: todos los clientes recibirían este mismo texto. Usa «Sugerir alternativas»."; combos.className = `hint ${n > 1 ? "" : "error-text"}`; };
+        setCombos();
+        return h("div", { class: "variant" },
+          h("div", { class: "panel-title" }, h("label", { for: `bv${i}`, text: `Redacción ${String.fromCharCode(65 + i)}` }),
+            draft.variants.length > 1 ? h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Quitar", onclick: () => { draft.variants.splice(i, 1); drawVariants(); drawPreview(); } }) : null),
+          area,
+          h("div", { class: "chips" }, ["nombre_cliente", "nombre_contacto", "saludo", "nombre_comercial", "zona"].map((k) => h("button", { class: "chip", type: "button", text: `{{${k}}}`, title: VARIABLES.find((x) => x.key === k)?.label, onclick: () => insertAtCursor(area, `{{${k}}}`) }))),
+          h("div", { class: "actions" }, h("button", { class: "btn btn-secondary btn-sm", type: "button", text: "✨ Sugerir alternativas", title: "Cambia frases comunes por equivalentes del mismo sentido, escritas como [[a|b|c]]. Las puedes revisar y editar.", onclick: () => {
+            const r = suggestAlternatives(va.body);
+            if (!r.groups) return toast("No encontré frases con equivalentes seguros; escribe las tuyas con [[opción 1|opción 2]].", "info", 6000);
+            va.body = r.text; area.value = r.text; setCombos(); drawPreview(); toast(`Se agregaron ${r.groups} grupo(s) de frases equivalentes. Revisa el texto: puedes editar o borrar cualquiera.`, "ok", 6000);
+          } })),
+          combos);
+      }));
     }
 
     const nameIn = h("input", { type: "text", value: draft.name, placeholder: "Ej.: Comunicado nuevo horario de despachos", oninput: (e) => { draft.name = e.target.value; } });
@@ -202,8 +214,11 @@ export function renderBroadcast(root, ctx) {
       if (!plan.ok.length) { toast("Ninguno de los clientes elegidos tiene un teléfono válido.", "err", 5000); return; }
       let built;
       try { built = buildRunItems({ recipients: plan.ok, variants: draft.variants, config: S().config }); } catch (e) { toast(e.message, "err"); return; }
+      const possible = draft.variants.filter((x) => x.body.trim()).reduce((n, x) => n + countCombos(x.body), 0);
       const lines = [`Se enviará a ${plan.ok.length} cliente(s), de a uno y con una pausa de ${v.pace.minDelay}–${v.pace.maxDelay} s entre cada envío.`];
       if (plan.skipped.length) lines.push(`Se omiten ${plan.skipped.length}: ${plan.skipped.slice(0, 4).map((s) => `${s.name} (${s.reason})`).join("; ")}${plan.skipped.length > 4 ? "…" : ""}.`);
+      lines.push(`Textos distintos: ${built.distinct} combinaciones de redacción repartidas entre los clientes.`);
+      if (possible < Math.min(plan.ok.length, 5)) lines.push("Ojo: casi todos recibirían el mismo texto, y WhatsApp puede marcarlo como spam. Cancela y pulsa «Sugerir alternativas» o agrega más redacciones.");
       if (built.warnings.length) lines.push(`Ojo: faltan datos para {{${built.warnings.join("}}, {{")}}} (revisa Configuración).`);
       if (!(await confirmDialog({ title: "Preparar envío", message: lines.join(" "), confirmText: "Preparar cola" }))) return;
       const run = newRun({ id: uid("run"), broadcast: draft, items: built.items, pace: v.pace });

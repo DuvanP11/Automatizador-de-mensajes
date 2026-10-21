@@ -30,6 +30,9 @@ const clickText = async (t, n = 0) => { const ok = await p.evaluate((t, n) => { 
 check("La sección Comunicados aparece en el menú", await p.evaluate(() => !!document.querySelector('#nav a[href="#/comunicados"]')));
 await p.type("main input[type=text]", "Aviso de octubre");
 check("Cargar ejemplo llena 2 redacciones", (await clickText("Cargar ejemplo")) && (await p.$$eval("main .variant textarea", (a) => a.length)) === 2);
+check("Redacción A sin frases intercambiables avisa que todos recibirían lo mismo", await p.evaluate(() => /mismo texto/.test(document.querySelector(".variant").textContent)));
+await p.evaluate(() => [...document.querySelectorAll("button")].find((x) => x.textContent.includes("Sugerir alternativas")).click()); await sleep(200);
+check("«Sugerir alternativas» agrega grupos [[a|b]] y cuenta las formas posibles", await p.evaluate(() => { const v = document.querySelector(".variant"); return /\[\[Te compartimos\|Te contamos\|Te comentamos\]\]/.test(v.querySelector("textarea").value) && /formas distintas/.test(v.textContent); }));
 await (await p.$('main input[type=file]')).uploadFile(png); await sleep(500);
 check("La imagen adjunta se previsualiza (CSP permite blob:)", await p.evaluate(() => { const i = document.querySelector("img.media-prev"); return !!i && i.complete && i.naturalWidth > 0; }));
 check("La vista previa muestra una burbuja por redacción, con imagen y sin llaves", await p.evaluate(() => { const b = [...document.querySelectorAll(".wa-bubble")]; return b.length === 2 && b.every((x) => x.querySelector("img") && x.textContent.trim().length > 20 && !x.textContent.includes("{{")); }));
