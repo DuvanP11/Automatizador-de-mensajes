@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateMedia, nextDelaySeconds, planRecipients, assignVariants, buildRunItems, newRun, sentTodayCount, runProgress, currentItem, MEDIA_LIMITS, sanitizePace } from "../js/core/broadcast.js";
+import { validateMedia, nextDelaySeconds, planRecipients, assignVariants, buildRunItems, newRun, sentTodayCount, runProgress, currentItem, MEDIA_LIMITS, sanitizePace, estimateRun, riskForDaily, SAME_DAY_GUIDE, parseManualLines, addManualClients } from "../js/core/broadcast.js";
 import { DEFAULT_CONFIG } from "../js/core/config.js";
 import { deepClone } from "../js/core/util.js";
 import { normalizeState } from "../js/core/store.js";
@@ -80,4 +80,30 @@ test("sanitizePace: vacío, 0 o negativo vuelven al valor por defecto y max nunc
   assert.equal(sanitizePace({ dailyCap: 0 }).dailyCap, 40);
   assert.equal(sanitizePace({ dailyCap: 229 }).dailyCap, 229);
   assert.equal(sanitizePace({ minDelay: 90, maxDelay: 30 }).maxDelay, 90);
+});
+
+test("estimateRun y guía de mismo día: duración razonable y riesgo coherente", () => {
+  assert.deepEqual(estimateRun(189, { minDelay: 90, maxDelay: 210, dailyCap: 189 }), { avgPause: 150, minutesFirstDay: 473, days: 1 });
+  assert.equal(estimateRun(189, { minDelay: 60, maxDelay: 180, dailyCap: 60 }).days, 4);
+  assert.equal(riskForDaily(60).level, "bajo"); assert.equal(riskForDaily(100).level, "medio"); assert.equal(riskForDaily(189).level, "alto");
+  for (const r of SAME_DAY_GUIDE) { assert.ok(r.maxDelay >= 2 * r.minDelay * 0.99 || r.maxDelay >= r.minDelay * 2 - 1 || r.maxDelay > r.minDelay); assert.ok(r.minutesFirstDay <= 9 * 60); }
+});
+
+test("parseManualLines: separadores, números en el nombre y líneas sin teléfono", () => {
+  assert.deepEqual(parseManualLines("Ambrosia Toy Store, 300 123 4567\nAirtempe SAS;3004975195\nTienda 24 horas\t3001112233\n\nSolo nombre"), [
+    { name: "Ambrosia Toy Store", phone: "300 123 4567" }, { name: "Airtempe SAS", phone: "3004975195" }, { name: "Tienda 24 horas", phone: "3001112233" }, { name: "Solo nombre", phone: "" }]);
+  assert.deepEqual(parseManualLines("Pedro Pérez 3101234567"), [{ name: "Pedro Pérez", phone: "3101234567" }]);
+});
+
+test("addManualClients: nuevo, mismo nombre suma teléfono, número ajeno no duplica, inválidos se rechazan", () => {
+  const base = [cl("a", "Alfa", ["3001112233"])];
+  const r = addManualClients(base, [
+    { name: "Nuevo SAS", phone: "3205550000" }, { name: "alfa", phone: "3109998877" }, { name: "Otro", phone: "300 111 2233" },
+    { name: "Malo", phone: "123" }, { name: "", phone: "3205551111" }, { name: "Fijo", phone: "6011234567" }]);
+  assert.equal(r.added, 1); assert.equal(r.merged, 1);
+  assert.equal(base.length, 2); assert.equal(base[0].contacts.length, 2);
+  assert.ok(r.uids.includes("a") && r.uids.length === 2);
+  assert.deepEqual(r.rejected.map((x) => x.reason.split(":")[0].split(";")[0]), ["Ese número ya es de «Alfa»", "Teléfono no válido", "Falta el nombre", "Teléfono no válido"]);
+  const again = addManualClients(base, [{ name: "Nuevo SAS", phone: "3205550000" }]);
+  assert.equal(again.added, 0); assert.equal(base.length, 2); // repetir no duplica
 });
