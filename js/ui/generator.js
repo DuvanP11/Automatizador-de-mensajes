@@ -1,8 +1,10 @@
 import { h, field, select, toast, confirmDialog, insertAtCursor } from "./dom.js";
+import { track } from "./audit.js";
 import { createEmojiPicker } from "./emoji.js";
 import { openImport } from "./clients.js";
 import { buildValues, renderTemplate, resolveZone, whatsappUrl, VARIABLES } from "../core/templates.js";
-import { validatePhone, normalizeText, nameKey } from "../core/util.js";
+import { validatePhone, normalizeText, nameKey, digitsOnly } from "../core/util.js";
+import { searchClients } from "../core/search.js";
 import { newFollowup, updateFollowup, stageOf } from "../core/followup.js";
 
 const NONE = "Ninguna";
@@ -20,7 +22,7 @@ export function renderGenerator(root, ctx) {
   if (!S().templates.some((t) => t.id === g.tplId)) g.tplId = tpl().id;
 
   // --- controles ---
-  const search = h("input", { type: "search", role: "combobox", "aria-expanded": "false", "aria-autocomplete": "list", "aria-controls": "sugg", autocomplete: "off", placeholder: "Nombre, ID o localidad…", value: g.query });
+  const search = h("input", { type: "search", role: "combobox", "aria-expanded": "false", "aria-autocomplete": "list", "aria-controls": "sugg", autocomplete: "off", placeholder: "Nombre, número, correo, ID o localidad…", value: g.query });
   const sugg = h("ul", { id: "sugg", class: "suggestions", role: "listbox", hidden: true });
   const nameIn = h("input", { type: "text", value: g.name, placeholder: "Nombre del cliente" });
   const idOut = h("input", { type: "text", readonly: true, "aria-readonly": "true" });
@@ -107,21 +109,35 @@ export function renderGenerator(root, ctx) {
   // --- eventos ---
   let active = -1, matches = [];
   function showSugg() {
-    const q = normalizeText(search.value);
-    const mine = normalizeText(S().config.commercial.name);
-    matches = q ? S().clients.filter((c) => (!g.onlyMine || !mine || normalizeText(c.owner) === mine) && (normalizeText(c.name).includes(q) || normalizeText(c.id).includes(q) || normalizeText(c.zone).includes(q) || normalizeText(c.legalName).includes(q))).slice(0, 8) : [];
-    active = -1;
-    sugg.replaceChildren(...matches.map((c, i) => h("li", { role: "option", id: `sg${i}`, "aria-selected": "false", onmousedown: (e) => { e.preventDefault(); pick(c); } },
-      c.name, h("span", { class: "meta", text: `ID: ${c.id || "—"} · ${c.zone || "Sin zona"}${c.contacts.some((x) => x.phone) ? " · con teléfono" : " · sin teléfono"}${c.owner ? ` · de ${c.owner}` : ""}` }))));
-    sugg.hidden = !matches.length; search.setAttribute("aria-expanded", String(!!matches.length));
+    // Con la caja vacía también se despliega la lista (todos los clientes, A–Z) para poder recorrerla y elegir sin escribir.
+    const r = searchClients(S().clients, search.value, { limit: 50, owner: g.onlyMine ? S().config.commercial.name : "" });
+    matches = r.items; active = -1;
+    const q = normalizeText(search.value), qd = digitsOnly(search.value);
+    const row = (c, i) => {
+      const tels = c.contacts.map((x) => x.phone).filter(Boolean), mails = c.contacts.map((x) => x.email).filter(Boolean);
+      const found = (qd.length >= 3 && tels.find((t) => digitsOnly(t).includes(qd))) || (q && mails.find((m) => normalizeText(m).includes(q))) || "";
+      return h("li", { role: "option", id: `sg${i}`, "aria-selected": "false", onmousedown: (e) => { e.preventDefault(); pick(c); } },
+        c.name, h("span", { class: "meta", text: `ID: ${c.id || "—"} · ${c.zone || "Sin zona"}${tels.length ? ` · ${tels[0]}${tels.length > 1 ? ` (+${tels.length - 1})` : ""}` : " · sin teléfono"}${c.owner ? ` · de ${c.owner}` : ""}` }),
+        found ? h("span", { class: "meta found", text: `Coincide: ${found}` }) : "");
+    };
+    const rows = matches.map(row);
+    if (r.total > matches.length) rows.push(h("li", { class: "sugg-more", "aria-hidden": "true", text: `Mostrando ${matches.length} de ${r.total}: escribe para acotar la búsqueda.` }));
+    if (!matches.length && search.value.trim()) rows.push(h("li", { class: "sugg-more", "aria-hidden": "true", text: "Ningún cliente coincide con esa búsqueda (se busca por nombre, número, correo, ID y localidad)." }));
+    sugg.replaceChildren(...rows);
+    const open = rows.length > 0;
+    sugg.hidden = !open; search.setAttribute("aria-expanded", String(open));
   }
   function pick(c) { sugg.hidden = true; search.setAttribute("aria-expanded", "false"); setClient(c); }
   search.addEventListener("input", () => { g.query = search.value; showSugg(); });
+  search.addEventListener("focus", showSugg);
+  search.addEventListener("click", () => { if (sugg.hidden) showSugg(); });
   search.addEventListener("keydown", (e) => {
-    if (sugg.hidden) return;
+    if (sugg.hidden) { if (e.key === "ArrowDown") { e.preventDefault(); showSugg(); } return; }
+    if (!matches.length) { if (e.key === "Escape") sugg.hidden = true; return; }
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault(); active = (active + (e.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
       [...sugg.children].forEach((li, i) => li.setAttribute("aria-selected", String(i === active)));
+      sugg.children[active]?.scrollIntoView?.({ block: "nearest" });
       search.setAttribute("aria-activedescendant", `sg${active}`);
     } else if (e.key === "Enter" && active >= 0) { e.preventDefault(); pick(matches[active]); }
     else if (e.key === "Escape") { sugg.hidden = true; }
@@ -152,6 +168,7 @@ export function renderGenerator(root, ctx) {
   async function copy() {
     try { await navigator.clipboard.writeText(msg.value); }
     catch { msg.select(); document.execCommand?.("copy"); }
+    track("msg_copy");
     toast("Mensaje copiado al portapapeles ✓");
   }
   async function openWa() {
@@ -163,6 +180,7 @@ export function renderGenerator(root, ctx) {
     if (!msg.value.trim()) { toast("El mensaje está vacío", "err"); return; }
     if (g.lastWarnings?.length && !(await confirmDialog({ title: "Hay datos faltantes", message: g.lastWarnings.join(" "), confirmText: "Abrir de todos modos" }))) return;
     window.open(whatsappUrl(v.waNumber, msg.value), "_blank", "noopener");
+    track("wa_open");
     if (g.logContact && g.clientUid) logContact();
   }
   function logContact() {

@@ -3,6 +3,11 @@
 // La apariencia viene del Agente Comercial (se guarda aquí la última que se leyó); si no hay ninguna, se usa el diseño de fábrica del CSS.
 (function () {
   try {
+    // Si se entró desde el Agente Comercial, la dirección trae «#ac=<firma>»: se guarda (para informar a su Auditoría) y se quita de la barra.
+    var m = /(?:^|[#&?\/])ac=([\w.\-]+)/.exec(location.hash);
+    if (m) { try { localStorage.setItem("pibox_ac_token_v1", m[1]); } catch (e) { /* sin almacenamiento */ } history.replaceState(null, "", location.pathname + location.search); }
+  } catch (e) { /* sin firma */ }
+  try {
     var root = document.documentElement;
     var u = JSON.parse(localStorage.getItem("pibox_ui_prefs_v1"));
     if (u && u.prefs && u.prefs.collapsed) root.setAttribute("data-nav", "collapsed");

@@ -12,6 +12,7 @@ import { renderIdeas } from "./ideas.js";
 import { HELP } from "../core/help.js";
 import { initPrefs, getPrefs, updatePrefs, subscribePrefs } from "./prefs.js";
 import { AGENTE_COMERCIAL_URL } from "../core/links.js";
+import { initAudit, trackView } from "./audit.js";
 import { initTips, applyControlTips, mountHelpButton, setHelpSection, closeHelp } from "./tips.js";
 
 const ROUTES = [
@@ -75,6 +76,7 @@ async function route() {
   currentPath = r.path;
   document.title = `${r.label} · Automatizador de Mensajes Pibox`;
   drawNav(r.path);
+  trackView(r.path);
   setHelpSection(r.path, r.label);
   closeHelp();
   main.replaceChildren();
@@ -91,6 +93,7 @@ async function route() {
 
 async function init() {
   initPrefs();
+  initAudit();
   drawToggle();
   initTips();
   mountHelpButton((p) => ctx.navigate(p));

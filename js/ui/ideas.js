@@ -1,4 +1,5 @@
 import { h, field, select, toast, confirmDialog, downloadWorkbook, emptyState, fmtDate } from "./dom.js";
+import { track } from "./audit.js";
 import { uid } from "../core/util.js";
 import { buildMailto } from "../core/ideas.js";
 
@@ -33,12 +34,14 @@ export function renderIdeas(root, ctx) {
     const idea = { id: uid("id"), title: draft.title.trim(), text: draft.text.trim(), kind: draft.kind, priority: draft.priority, author: draft.author.trim(), createdAt: new Date().toISOString() };
     store.commit((d) => { d.ideas.unshift(idea); });
     ctx.dirty = null;
+    track("idea_save");
     toast("Idea guardada ✓ Gracias por ayudarnos a mejorar");
     root.replaceChildren(); renderIdeas(root, ctx);
   }
 
   const mail = (ideas) => {
     const { href, omitted } = buildMailto(S().config.ideasEmail, ideas);
+    track("idea_send");
     location.href = href; // mailto: lo gestiona el programa de correo; la página no se descarga
     if (omitted) toast(`Eran muchas: se incluyeron las más recientes. Faltan ${omitted}; descarga el Excel para llevarlas todas.`, "info", 6000);
     else if (!S().config.ideasEmail) toast("Elige el destinatario en tu correo. Puedes dejarlo fijo en Configuración.", "info", 5000);

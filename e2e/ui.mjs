@@ -219,6 +219,37 @@ await p.evaluate(() => localStorage.setItem("pibox_ui_prefs_v1", JSON.stringify(
 await reloadWait();
 check("Una apariencia local antigua ya no se aplica: manda la del Agente Comercial", (await rootVar("--brand")) === "#5b2a86", await rootVar("--brand"));
 
+// ---------- Buscador de clientes del Generador ----------
+await p.evaluate(() => window.__pibox.store.commit((d) => { const c = d.clients.find((x) => x.id === "ALF001"); c.contacts = [{ cid: "a", name: "Carlos", phone: "3045550101", email: "ventas@alfa.test", primary: true }]; }));
+await go("generador");
+const sugg = () => p.$$eval("#sugg li", (l) => ({ n: l.length, hidden: document.getElementById("sugg").hidden, txt: l.map((x) => x.textContent).join(" | ") }));
+await p.click("#gsearch"); await sleep(250);
+let sg = await sugg();
+check("Al hacer clic en el buscador se despliega la lista de clientes sin escribir nada", !sg.hidden && sg.n >= 50 && sg.txt.includes("Mostrando 50 de 105"), `${sg.n} ${sg.hidden}`);
+await setVal("#gsearch", "3045550101"); sg = await sugg();
+check("Buscar por número de teléfono encuentra al cliente y muestra por qué coincide", sg.n === 1 && sg.txt.includes("Alfa Demo Logística") && sg.txt.includes("Coincide: 3045550101"), sg.txt);
+await setVal("#gsearch", "304 555 0101"); sg = await sugg();
+check("El número se busca con espacios y cualquier formato", sg.n === 1 && sg.txt.includes("Alfa Demo"), sg.txt);
+await setVal("#gsearch", "ventas@alfa"); sg = await sugg();
+check("Buscar por correo encuentra al cliente", sg.n === 1 && sg.txt.includes("Coincide: ventas@alfa.test"), sg.txt);
+await setVal("#gsearch", "zzzzqq"); sg = await sugg();
+check("Sin coincidencias avisa por qué campos se busca", sg.n === 1 && sg.txt.includes("nombre, número, correo"), sg.txt);
+await setVal("#gsearch", ""); await p.keyboard.press("ArrowDown"); await p.keyboard.press("Enter"); await sleep(350);
+check("Con el teclado se elige un cliente de la lista", (await p.$eval("#gsearch", (e) => e.value)).length > 0 && (await p.$eval("#gphone", (e) => e.value)) !== undefined);
+await p.$eval("#gsearch", (e) => e.blur());
+
+// ---------- Firma de entrada desde el Agente Comercial ----------
+const fakeTok = Buffer.from(JSON.stringify({ u: "x", e: Date.now() + 3_600_000 })).toString("base64url") + ".firma";
+const viaAgente = await b.newPage(); await viaAgente.setRequestInterception(true); viaAgente.on("request", (rq) => (rq.url().startsWith(AC) ? rq.abort("failed") : rq.continue()));
+await viaAgente.goto(`${BASE}#ac=${fakeTok}`, { waitUntil: "networkidle0" });
+check("La firma de entrada se guarda y desaparece de la barra de direcciones", (await viaAgente.evaluate(() => localStorage.getItem("pibox_ac_token_v1"))) === fakeTok && !viaAgente.url().includes("ac="), viaAgente.url());
+check("Con firma, Configuración avisa que se informa a la Auditoría (sin datos de clientes)", await (async () => { await viaAgente.evaluate(() => (location.hash = "#/configuracion")); await sleep(300); return (await viaAgente.$eval("main", (m) => m.textContent)).includes("Entraste desde el Agente Comercial"); })());
+await viaAgente.evaluate(() => localStorage.removeItem("pibox_ac_token_v1")); // el almacenamiento se comparte entre pestañas del mismo sitio
+await viaAgente.close();
+await p.reload({ waitUntil: "networkidle0" });
+await go("configuracion");
+check("Sin firma, Configuración explica que esta sesión no está informando", (await p.$eval("main", (m) => m.textContent)).includes("Esta sesión no está informando"));
+
 // ---------- Tutorial ----------
 await go("tutorial");
 check("Tutorial: 9 pasos con enlace a su sección", (await p.$$eval("main ol.steps li", (e) => e.length)) === 9 && (await p.$$eval("main ol.steps a", (a) => a.every((x) => x.getAttribute("href").startsWith("#/")))));

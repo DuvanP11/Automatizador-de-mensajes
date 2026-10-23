@@ -1,4 +1,5 @@
 import { h, field, select, toast, openDialog, emptyState, fmtDate } from "./dom.js";
+import { track } from "./audit.js";
 import { buildRows, sortRows, newFollowup, updateFollowup, stageOf } from "../core/followup.js";
 import { todayBogota } from "../core/util.js";
 import { commercials } from "./clients.js";
@@ -26,6 +27,7 @@ export function renderFollowup(root, ctx) {
       if (!fu.owner && !p.owner && d.config.commercial.name) p.owner = d.config.commercial.name;
       d.followups[clientUid] = updateFollowup(fu, p, { by: d.config.commercial.name, statuses: d.config.statuses });
     });
+    track("followup_update");
     if (okMsg) toast(okMsg);
   }
 

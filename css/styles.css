@@ -102,6 +102,9 @@ tr.overdue td:first-child { box-shadow: inset 4px 0 0 var(--err); }
 .suggestions li:last-child { border-bottom: 0; }
 .suggestions li[aria-selected="true"], .suggestions li:hover { background: var(--brand-50); }
 .suggestions .meta { display: block; font-size: .8rem; color: var(--muted); }
+.suggestions .meta.found { color: var(--brand); font-weight: 600; }
+.suggestions .sugg-more { cursor: default; color: var(--muted); font-size: .82rem; background: var(--brand-50); }
+.suggestions .sugg-more:hover { background: var(--brand-50); }
 
 /* Message panels */
 .panel-title { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .5rem; }

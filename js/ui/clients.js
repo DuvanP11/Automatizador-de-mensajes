@@ -1,4 +1,5 @@
 import { h, field, select, toast, confirmDialog, openDialog, downloadWorkbook, emptyState } from "./dom.js";
+import { track } from "./audit.js";
 import { assignOwner, sheetToMatrix, detectMapping, extractRecords, planImport, applyPlan, summarizePlan, resolveReview, errorReportRows, mappingIsUsable, FIELD_LABELS, statusLabel } from "../core/importer.js";
 import { buildSimpleWorkbook } from "../core/report.js";
 import { updateFollowup } from "../core/followup.js";
@@ -76,6 +77,7 @@ export function renderClients(root, ctx) {
     if (!ok) return;
     store.commit((d) => reassignOwners(d, [...view.sel], name));
     view.sel.clear(); view.bulkOwner = "";
+    track("clients_assign", n);
     drawTable(); toast(name ? `${n} cliente(s) asignados a ${name} ✓` : "Comercial quitado");
   }
 
@@ -84,6 +86,7 @@ export function renderClients(root, ctx) {
     const ok = await confirmDialog({ title: "Eliminar cliente", message: `Se eliminará «${c.name}» con sus contactos${fu?.history?.length ? ` y su historial de seguimiento (${fu.history.length} eventos)` : ""}. Esta acción no se puede deshacer; considera descargar un respaldo antes.`, confirmText: "Eliminar", danger: true });
     if (!ok) return;
     store.commit((d) => { d.clients = d.clients.filter((x) => x.uid !== c.uid); delete d.followups[c.uid]; });
+    track("client_delete");
     drawTable(); toast("Cliente eliminado");
   }
 
@@ -133,7 +136,9 @@ export function renderClients(root, ctx) {
       const now = new Date().toISOString();
       Object.assign(draft, { name: f.name.value.trim(), id: f.id.value.trim(), legalName: f.legalName.value.trim(), zone: f.zone.value.trim(), owner: f.owner.value.trim(), notes: f.notes.value.trim(), updatedAt: now, createdAt: draft.createdAt || now });
       if (draft.contacts.length && !draft.contacts.some((c) => c.primary)) draft.contacts[0].primary = true;
+      const wasNew = !store.state.clients.some((c) => c.uid === draft.uid);
       store.commit((d) => { const i = d.clients.findIndex((c) => c.uid === draft.uid); if (i >= 0) d.clients[i] = draft; else d.clients.push(draft); });
+      track(wasNew ? "client_create" : "client_edit");
       dlg.close(); drawTable(); toast("Cliente guardado");
     });
   }
@@ -141,7 +146,7 @@ export function renderClients(root, ctx) {
   const undoBtn = h("button", { class: "btn btn-ghost", type: "button", text: "↶ Deshacer última importación", hidden: !ctx.lastImportUndo, onclick: async () => {
     if (!(await confirmDialog({ title: "Deshacer importación", message: "Se restaurarán los clientes tal como estaban antes de la última importación de esta sesión. Los cambios de seguimiento posteriores a ella no se tocan.", confirmText: "Deshacer", danger: true }))) return;
     store.commit((d) => { d.clients = ctx.lastImportUndo; });
-    ctx.lastImportUndo = null; undoBtn.hidden = true; drawTable(); toast("Importación deshecha");
+    ctx.lastImportUndo = null; undoBtn.hidden = true; track("import_undo"); drawTable(); toast("Importación deshecha");
   } });
 
   root.append(
@@ -392,6 +397,7 @@ export function openImport(ctx, onDone, presetKind = "") {
       }
     });
     dlg.close(); onDone?.();
+    if (W.kind === "directory") track("contacts_import", stats.contactsAdded); else track("clients_import", stats.created + stats.updated);
     const owned = W.owner.trim() ? ` · comercial: ${W.owner.trim()}` : "";
     toast(`Importación aplicada: ${stats.created} nuevos, ${stats.updated} actualizados, ${stats.contactsAdded} contactos agregados${owned}`, "ok", 6000);
   }

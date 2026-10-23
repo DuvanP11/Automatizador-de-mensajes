@@ -1,4 +1,5 @@
 import { h, field, toast, confirmDialog, insertAtCursor } from "./dom.js";
+import { track } from "./audit.js";
 import { createEmojiPicker } from "./emoji.js";
 import { VARIABLES, renderTemplate, buildValues, lintTemplate, resolveZone } from "../core/templates.js";
 import { uid } from "../core/util.js";
@@ -60,7 +61,7 @@ export function renderTemplates(root, ctx) {
       const problems = lintTemplate(draft.body);
       if (problems.length || !draft.name.trim()) return;
       store.commit((d) => { const x = d.templates.find((y) => y.id === v.id); x.name = draft.name.trim(); x.body = draft.body; x.updatedAt = new Date().toISOString(); });
-      draft = { name: draft.name.trim(), body: draft.body }; drawList(); update(); toast("Plantilla guardada");
+      draft = { name: draft.name.trim(), body: draft.body }; track("tpl_save"); drawList(); update(); toast("Plantilla guardada");
     }
 
     editor.replaceChildren(
@@ -83,7 +84,7 @@ export function renderTemplates(root, ctx) {
       h("div", { class: "card" },
         h("h2", { text: "Acciones de la plantilla" }),
         h("div", { class: "actions" },
-          h("button", { class: "btn btn-secondary", type: "button", text: "Duplicar", onclick: () => { const nid = uid("tpl"); store.commit((d) => d.templates.push({ id: nid, name: `${t.name} (copia)`, body: t.body, isDefault: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() })); v.id = nid; drawList(); drawEditor(); toast("Plantilla duplicada"); } }),
+          h("button", { class: "btn btn-secondary", type: "button", text: "Duplicar", onclick: () => { track("tpl_save"); const nid = uid("tpl"); store.commit((d) => d.templates.push({ id: nid, name: `${t.name} (copia)`, body: t.body, isDefault: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() })); v.id = nid; drawList(); drawEditor(); toast("Plantilla duplicada"); } }),
           h("button", { class: "btn btn-secondary", type: "button", text: "Marcar como predeterminada", disabled: t.isDefault, onclick: () => { store.commit((d) => d.templates.forEach((x) => (x.isDefault = x.id === v.id))); drawList(); drawEditor(); toast("Plantilla predeterminada actualizada"); } }),
           h("button", { class: "btn btn-danger", type: "button", text: "Eliminar", disabled: S().templates.length < 2, onclick: remove })),
         S().templates.length < 2 ? h("p", { class: "hint", text: "Debe existir al menos una plantilla." }) : null),
@@ -96,14 +97,14 @@ export function renderTemplates(root, ctx) {
     const t = cur();
     if (!(await confirmDialog({ title: "Eliminar plantilla", message: `¿Eliminar «${t.name}»? No se puede deshacer.`, confirmText: "Eliminar", danger: true }))) return;
     store.commit((d) => { d.templates = d.templates.filter((x) => x.id !== t.id); if (!d.templates.some((x) => x.isDefault)) d.templates[0].isDefault = true; });
-    v.id = S().templates.find((x) => x.isDefault).id; draft = null; drawList(); drawEditor(); toast("Plantilla eliminada");
+    v.id = S().templates.find((x) => x.isDefault).id; draft = null; track("tpl_delete"); drawList(); drawEditor(); toast("Plantilla eliminada");
   }
 
   root.append(
     h("div", { class: "page-head" }, h("div", {}, h("h1", { text: "Plantillas" }), h("p", { text: "Edita el texto base con variables. El mensaje final se genera aparte, sin modificar la plantilla." })),
       h("button", { class: "btn btn-primary", type: "button", text: "+ Nueva plantilla", onclick: async () => {
         if (isDirty() && !(await confirmDialog({ title: "Cambios sin guardar", message: "Descartar los cambios actuales?", confirmText: "Descartar", danger: true }))) return;
-        const nid = uid("tpl"); store.commit((d) => d.templates.push({ id: nid, name: "Nueva plantilla", body: "{{saludo}} {{nombre_cliente}}\n\nMi nombre es {{nombre_comercial}}, {{cargo_comercial}} de Pibox.\n\n", isDefault: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }));
+        track("tpl_save"); const nid = uid("tpl"); store.commit((d) => d.templates.push({ id: nid, name: "Nueva plantilla", body: "{{saludo}} {{nombre_cliente}}\n\nMi nombre es {{nombre_comercial}}, {{cargo_comercial}} de Pibox.\n\n", isDefault: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }));
         v.id = nid; draft = null; drawList(); drawEditor(); } })),
     h("div", { class: "split" }, h("nav", { class: "card", "aria-label": "Plantillas guardadas" }, h("h3", { text: "Mis plantillas" }), listHost), editor),
   );
