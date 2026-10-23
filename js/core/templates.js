@@ -3,8 +3,8 @@
 import { formatMoney, hourBogota } from "./util.js";
 
 export const VARIABLES = [
-  { key: "nombre_cliente", label: "Nombre del cliente", required: true, example: "Ambrosia Toy Store" },
-  { key: "id_cliente", label: "ID del cliente", required: false, example: "AMB001" },
+  { key: "nombre_cliente", label: "Nombre del cliente", required: true, example: "Tienda Demo Juguetes" },
+  { key: "id_cliente", label: "ID del cliente", required: false, example: "DEM001" },
   { key: "nombre_contacto", label: "Nombre del contacto", required: false, example: "Laura" },
   { key: "nombre_comercial", label: "Nombre del comercial", required: true, example: "Juliana Rojas" },
   { key: "cargo_comercial", label: "Cargo del comercial", required: true, example: "Account Manager" },

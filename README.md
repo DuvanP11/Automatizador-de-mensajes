@@ -28,7 +28,7 @@ Es un sitio estático (sin backend, sin build):
 npm start            # = npx serve .   (o: python3 -m http.server 8791)
 ```
 
-Abre la URL que indique (no sirve abrir `index.html` con doble clic: los módulos ES y la carga de `data/clientes.json` requieren servidor). Se despliega tal cual en Vercel (`vercel.json`).
+Abre la URL que indique (no sirve abrir `index.html` con doble clic: los módulos ES requieren servidor). Se despliega tal cual en Vercel (`vercel.json`).
 
 Requisitos: un navegador moderno. Para las pruebas: Node 20+.
 
@@ -78,7 +78,7 @@ Todo vive en el **`localStorage` de este navegador**: un solo usuario, un solo e
 - Sin inicio de sesión ni permisos: el «comercial responsable» es un dato, no una cuenta. No hay seguridad por usuario.
 - Sin sincronización multiusuario; eso requeriría un backend con autenticación y base de datos (ver `INFORME_IMPLEMENTACION.md`).
 - SheetJS Community no escribe estilos: el Excel trae filtros, anchos, fechas y formatos de número, pero sin negritas ni colores de encabezado.
-- La base inicial `data/clientes.json` (105 clientes: nombre, ID y localidad) ya estaba en el repositorio público; se usa solo como semilla la primera vez.
+- **La web no trae ninguna base de clientes.** Cada persona carga la suya (Clientes y contactos → «Agregar o sincronizar clientes») y vive solo en su navegador. El repositorio es público y el sitio no tiene inicio de sesión, por eso ningún dato de clientes puede ir en el código; `tests/privacidad.test.js` lo vigila.
 
 ## Pruebas
 ```bash

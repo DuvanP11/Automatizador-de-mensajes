@@ -4,6 +4,7 @@ import puppeteer from "puppeteer-core";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
+import { seedFake } from "./fake-base.mjs";
 const BASE = process.env.E2E_URL || "http://127.0.0.1:8791/index.html";
 const results = [];
 const check = (name, cond, extra = "") => results.push([cond ? "APROBADO" : "FALLIDO", name, cond ? "" : String(extra)]);
@@ -19,6 +20,7 @@ p.on("console", (m) => { if (m.type() === "error") errs.push(m.text()); });
 await p.setViewport({ width: 1366, height: 900 });
 await p.goto(BASE, { waitUntil: "networkidle0" });
 await p.evaluate(() => localStorage.clear()); await p.reload({ waitUntil: "networkidle0" });
+await seedFake(p); await sleep(200);
 // Teléfonos a los primeros 5 clientes (3 válidos distintos, 1 repetido, 1 fijo).
 await p.evaluate(() => {
   const ph = ["3001110001", "3001110002", "3001110003", "3001110001", "6011234567"];

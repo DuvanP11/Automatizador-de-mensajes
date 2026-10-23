@@ -34,7 +34,7 @@ export function normalizeState(raw) {
   return s;
 }
 
-/** Convierte data/clientes.json (formato v1) en clientes v2. */
+/** Convierte una lista en formato v1 (id, cliente, localidad) en clientes v2. Ya no hay base incluida con la web; lo usan las pruebas. */
 export function seedClients(list, zones) {
   const now = new Date().toISOString();
   const canon = new Map(zones.map((z) => [nameKey(z), z]));

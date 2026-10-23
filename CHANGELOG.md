@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.4.1 — Sin datos de clientes en el repositorio
+- **Se retira la base incluida** (`data/clientes.json`: 105 nombres con ID y zona) que el repositorio público y el sitio servían a cualquiera. Ahora la web arranca **vacía** y cada persona carga sus propios clientes; lo que importa vive solo en su navegador.
+- **Pruebas sin datos reales:** nombres, teléfonos y correos de las pruebas, ejemplos y textos de ayuda pasan a ser ficticios; las pruebas de navegador usan una base inventada (`e2e/fake-base.mjs`).
+- Nueva `tests/privacidad.test.js`: falla si vuelve a aparecer un archivo de clientes, una lectura de red distinta de la apariencia, o una CSP más abierta de lo debido.
+
 ## 2.4.0 — Apariencia compartida con el Agente Comercial
 - **La apariencia ahora se define en el Agente Comercial** y esta web la toma de allá: colores, modo claro/oscuro/automático, esquinas, tipo de letra y logo propio. Se lee de `https://agente-comercial-xi.vercel.app/api/public/theme` (solo colores y formas, sin datos de nadie), se **valida** (colores `#rrggbb`, listas cerradas, logo solo si sale del propio Agente) y se aplica al abrir o recargar.
 - Si el Agente no responde (sin internet, caído, respuesta inválida) la web **sigue funcionando** con la última apariencia guardada o, si nunca la leyó, con el diseño de fábrica. Se pinta sin destello gracias al script de arranque.

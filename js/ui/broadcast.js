@@ -185,7 +185,7 @@ export function renderBroadcast(root, ctx) {
     // --- agregar a mano ---
     const mName = h("input", { type: "text", placeholder: "Nombre del cliente", autocomplete: "off" });
     const mPhone = h("input", { type: "tel", inputmode: "tel", placeholder: "300 123 4567", autocomplete: "off" });
-    const mBulk = h("textarea", { rows: 4, placeholder: "Uno por línea:\nAmbrosia Toy Store, 300 123 4567\nAirtempe SAS; 3004975195" });
+    const mBulk = h("textarea", { rows: 4, placeholder: "Uno por línea:\nTienda Demo Juguetes, 300 123 4567\nAire Demo SAS; 3045550108" });
     function applyManual(entries) {
       if (!entries.length) { toast("Escribe al menos un nombre y un teléfono", "err"); return false; }
       let res;

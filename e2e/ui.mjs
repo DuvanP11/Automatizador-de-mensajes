@@ -6,6 +6,7 @@ import XLSX from "xlsx";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
+import { seedFake } from "./fake-base.mjs";
 XLSX.set_fs(fs);
 const D = process.env.E2E_DIR || fs.mkdtempSync(path.join(os.tmpdir(), "pibox-ui-"));
 const SHOTS = process.env.E2E_SHOTS; if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
@@ -72,6 +73,7 @@ const typeInto = async (el, text) => { await el.focus(); await el.evaluate((e) =
 
 await p.goto(BASE, { waitUntil: "networkidle0" });
 await p.evaluate(() => localStorage.clear()); await p.reload({ waitUntil: "networkidle0" });
+await seedFake(p); await sleep(200);
 
 // ---------- Menú ----------
 const links = await p.$$eval("#nav a", (a) => a.map((x) => x.getAttribute("href")));

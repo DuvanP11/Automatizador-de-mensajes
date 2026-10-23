@@ -48,7 +48,7 @@ export function renderTemplates(root, ctx) {
       if (!draft.name.trim()) problems.push("La plantilla necesita un nombre");
       lint.replaceChildren(problems.length ? h("div", { class: "alert err" }, h("ul", {}, problems.map((p) => h("li", { text: p })))) : "");
       const c = S().clients.find((x) => x.uid === clientSel.value);
-      const sample = c || { name: "Ambrosia Toy Store", id: "AMB001" };
+      const sample = c || { name: "Tienda Demo Juguetes", id: "DEM001" };
       const values = buildValues({ config: S().config, client: sample, contact: c?.contacts[0] || { name: "Laura" }, zone: resolveZone(zoneSel.value, "") });
       const r = renderTemplate(draft.body, values, { seed: ctx.gen?.seed || 0, emojis: S().config.emojis.enabled });
       preview.textContent = r.text;
