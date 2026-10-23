@@ -3,6 +3,8 @@ import { STAGES } from "../core/config.js";
 import { formatMoney, deepClone, uid } from "../core/util.js";
 import { greetingFor } from "../core/templates.js";
 import { isValidEmail } from "../core/util.js";
+import { AGENTE_COMERCIAL_URL } from "../core/links.js";
+import { getPrefs, updatePrefs } from "./prefs.js";
 
 const ROLES = ["Gestor comercial", "Account Manager", "Ejecutivo comercial", "Asesor comercial"];
 
@@ -115,6 +117,12 @@ export function renderSettings(root, ctx) {
       field("Comercial(es) del equipo (uno por línea)", comTa, "Aparecen en los filtros y asignaciones. No es un sistema de usuarios: la aplicación no tiene inicio de sesión."),
       text("Correo para recibir las ideas del buzón", cfg, "ideasEmail", { type: "email", placeholder: "correo@empresa.com" }, "Opcional. Al pulsar «Enviar por correo» en el Buzón de ideas se abre tu correo con este destinatario ya escrito."),
       h("div", { class: "check" }, h("input", { type: "checkbox", id: "emon", checked: cfg.emojis.enabled, onchange: (e) => { cfg.emojis.enabled = e.target.checked; mark(); } }), h("label", { for: "emon", text: "Usar emojis en los mensajes generados" }))),
+    h("section", { class: "card" }, h("h2", { text: "Apariencia y ayudas" }),
+      h("p", { text: "Los colores, el modo claro u oscuro, las formas y el logo de esta web los define el Agente Comercial: lo que se elige allá se aplica aquí solo, la próxima vez que se abre o recarga." }),
+      h("div", { class: "actions" }, h("a", { class: "btn btn-secondary", href: `${AGENTE_COMERCIAL_URL}/apariencia`, target: "_blank", rel: "noopener", text: "Cambiar la apariencia en el Agente Comercial ↗" })),
+      h("div", { class: "check" }, h("input", { type: "checkbox", id: "tipsChk", checked: getPrefs().tips, onchange: (e) => { if (!updatePrefs({ tips: e.target.checked })) toast("No se pudo guardar esta preferencia en este navegador.", "err", 5000); } }),
+        h("label", { for: "tipsChk", text: "Mostrar ayudas flotantes al pasar el mouse sobre botones y opciones" })),
+      h("p", { class: "hint", text: "Esta casilla es solo de tu navegador y se aplica al instante; no necesita «Guardar configuración»." })),
     h("section", { class: "card" }, h("h2", { text: "Estados de seguimiento" }), statusHost),
     h("section", { class: "card" }, h("h2", { text: "Datos y respaldo" }),
       h("div", { class: "alert info", text: "Tus datos viven solo en este navegador. No hay servidor ni copia automática: si borras los datos del sitio o cambias de equipo se pierden. Descarga respaldos con frecuencia." }),

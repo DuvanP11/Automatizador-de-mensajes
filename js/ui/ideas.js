@@ -2,7 +2,7 @@ import { h, field, select, toast, confirmDialog, downloadWorkbook, emptyState, f
 import { uid } from "../core/util.js";
 import { buildMailto } from "../core/ideas.js";
 
-const KINDS = ["Generador de mensajes", "Clientes y contactos", "Plantillas", "Seguimiento comercial", "Informes", "Apariencia", "Ayuda y tutorial", "Otra cosa"];
+const KINDS = ["Generador de mensajes", "Clientes y contactos", "Plantillas", "Seguimiento comercial", "Informes", "Ayuda y tutorial", "Otra cosa"];
 const PRIORITIES = [{ value: "baja", label: "Sería bueno tenerlo" }, { value: "media", label: "Me ayudaría bastante" }, { value: "alta", label: "Me estorba hoy / es urgente" }];
 const PRIORITY_LABEL = Object.fromEntries(PRIORITIES.map((p) => [p.value, p.label]));
 

@@ -1,4 +1,5 @@
-// Pruebas de navegador de la personalización: menú contraíble, ayudas flotantes, apariencia, tutorial y buzón de ideas.
+// Pruebas de navegador de la personalización: menú contraíble, ayudas flotantes, apariencia compartida con el Agente Comercial, tutorial y buzón de ideas.
+// El Agente Comercial se simula interceptando /api/public/theme (aquí no hay internet ni servidor real).
 // Uso: servir el sitio (python3 -m http.server 8791) y `node e2e/ui.mjs`. Con E2E_SHOTS=<carpeta> guarda capturas.
 import puppeteer from "puppeteer-core";
 import XLSX from "xlsx";
@@ -23,8 +24,31 @@ const b = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || "/
 const p = await b.newPage();
 const errs = [];
 p.on("pageerror", (e) => errs.push(e.message));
-p.on("console", (m) => { if (m.type() === "error") errs.push(m.text()); });
+p.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errs.push(m.text()); }); // las cargas fallidas del tema simulado son a propósito
 p.on("dialog", (d) => d.dismiss());
+// ---- Agente Comercial simulado ----
+const AC = "https://agente-comercial-xi.vercel.app";
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+const PAL = { pibox: { l: { brand: "#5b2a86", accent: "#f5b83d", bg: "#faf8fc", surface: "#ffffff", text: "#231a2e", muted: "#6b6277", border: "#e4dcee", ok: "#167a4a", warn: "#8a5a00", err: "#b3261e" }, d: { brand: "#b88ae6", accent: "#f5b83d", bg: "#16111c", surface: "#1f1828", text: "#efe9f6", muted: "#a79bb8", border: "#3a2f48", ok: "#62d49a", warn: "#f5c566", err: "#ff8a82" } },
+  oceano: { l: { brand: "#0b6e99", accent: "#f59e0b", bg: "#f4f9fc", surface: "#ffffff", text: "#10222e", muted: "#587081", border: "#d3e3ec", ok: "#167a4a", warn: "#8a5a00", err: "#b3261e" }, d: { brand: "#5cc0ee", accent: "#f5b83d", bg: "#0d1a22", surface: "#13252f", text: "#e6f3fa", muted: "#8fb0c2", border: "#254250", ok: "#62d49a", warn: "#f5c566", err: "#ff8a82" } },
+  bosque: { l: { brand: "#2f6b3a", accent: "#e0a526", bg: "#f6faf4", surface: "#ffffff", text: "#1a2a1c", muted: "#5f7262", border: "#d9e6d6", ok: "#167a4a", warn: "#8a5a00", err: "#b3261e" }, d: { brand: "#8fd49a", accent: "#f5b83d", bg: "#0f1a12", surface: "#16241a", text: "#e8f3e9", muted: "#9bb59f", border: "#2a4130", ok: "#62d49a", warn: "#f5c566", err: "#ff8a82" } },
+  atardecer: { l: { brand: "#c2410c", accent: "#7c3aed", bg: "#fff8f3", surface: "#ffffff", text: "#2b1a12", muted: "#7a6558", border: "#f0dccd", ok: "#167a4a", warn: "#8a5a00", err: "#b3261e" }, d: { brand: "#fb923c", accent: "#c4b5fd", bg: "#1c1310", surface: "#281c17", text: "#fbeee6", muted: "#c0a899", border: "#473429", ok: "#62d49a", warn: "#f5c566", err: "#ff8a82" } },
+  grafito: { l: { brand: "#374151", accent: "#f59e0b", bg: "#f3f4f6", surface: "#ffffff", text: "#111827", muted: "#6b7280", border: "#d9dce1", ok: "#167a4a", warn: "#8a5a00", err: "#b3261e" }, d: { brand: "#cbd5e1", accent: "#fbbf24", bg: "#111214", surface: "#1a1c1f", text: "#f1f3f5", muted: "#9aa1ab", border: "#33373d", ok: "#62d49a", warn: "#f5c566", err: "#ff8a82" } },
+  contraste: { l: { brand: "#0000b3", accent: "#b35900", bg: "#ffffff", surface: "#ffffff", text: "#000000", muted: "#3d3d3d", border: "#000000", ok: "#006100", warn: "#6b3f00", err: "#a00000" }, d: { brand: "#ffd60a", accent: "#00e5ff", bg: "#000000", surface: "#0a0a0a", text: "#ffffff", muted: "#d0d0d0", border: "#ffffff", ok: "#4dff88", warn: "#ffd60a", err: "#ff6b6b" } } };
+const themeJson = (pal, over = {}) => ({ v: 1, scheme: "auto", light: PAL[pal].l, dark: PAL[pal].d, radius: 10, font: "system", logoUrl: null, version: `${pal}-${JSON.stringify(over).length}`, ...over });
+let mock = { status: 500, body: "" };           // lo que responde el «Agente Comercial» a /api/public/theme
+const hits = [];
+await p.setRequestInterception(true);
+p.on("request", (rq) => {
+  const u = rq.url();
+  if (u.startsWith(`${AC}/api/public/theme`)) { hits.push(rq.method()); return mock.status === 0 ? rq.abort("failed") : rq.respond({ status: mock.status, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: typeof mock.body === "string" ? mock.body : JSON.stringify(mock.body) }); }
+  if (u.startsWith(`${AC}/brand/logo`)) return rq.respond({ status: 200, contentType: "image/png", headers: { "access-control-allow-origin": "*" }, body: PNG });
+  if (u.startsWith(AC)) return rq.abort("failed");
+  return rq.continue();
+});
+const setTheme = (pal, over) => { mock = { status: 200, body: themeJson(pal, over) }; };
+const reloadWait = async () => { await p.reload({ waitUntil: "networkidle0" }); await sleep(300); };
+
 const cdp = await p.createCDPSession();
 await cdp.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: D + "/dl" });
 await p.setViewport({ width: 1366, height: 900 });
@@ -51,7 +75,7 @@ await p.evaluate(() => localStorage.clear()); await p.reload({ waitUntil: "netwo
 
 // ---------- Menú ----------
 const links = await p.$$eval("#nav a", (a) => a.map((x) => x.getAttribute("href")));
-check("El menú tiene 10 opciones, incluidas Apariencia, Tutorial y Buzón de ideas", links.length === 10 && ["#/apariencia", "#/tutorial", "#/ideas"].every((h) => links.includes(h)), links.join(","));
+check("El menú tiene 9 opciones (ya no hay «Apariencia»: la define el Agente Comercial), con Tutorial y Buzón de ideas", links.length === 9 && !links.includes("#/apariencia") && ["#/tutorial", "#/ideas"].every((h) => links.includes(h)), links.join(","));
 const wide = await p.$eval(".sidebar", (e) => e.getBoundingClientRect().width);
 check("Menú expandido: ~236 px y botón «Contraer el menú»", Math.abs(wide - 236) < 2 && (await p.$eval("#navToggle", (e) => e.getAttribute("aria-label"))) === "Contraer el menú" && (await p.$eval("#navToggle", (e) => e.getAttribute("aria-expanded"))) === "true", wide);
 await shot("01-menu-expandido");
@@ -99,96 +123,112 @@ for (const r of ["clientes", "seguimiento", "informes", "configuracion"]) {
   check(`Sección ${r}: tiene ayudas flotantes en sus controles`, (await p.$$eval("main [data-tip]", (e) => e.length)) >= 2);
 }
 
-// ---------- Apariencia ----------
+// ---------- Apariencia compartida con el Agente Comercial ----------
+check("Sin respuesta del Agente Comercial (y sin nada guardado) se ve el diseño de fábrica morado Pibox", (await rootVar("--brand")) === "#5b2a86" && (await rootVar("--bg")) === "#faf8fc" && hits.length > 0, await rootVar("--brand"));
+check("La herramienta funciona igual aunque el Agente no responda (el menú se pinta)", (await p.$$("#nav a")).length === 9);
 await go("apariencia");
-await shot("06-apariencia");
-await card("Océano");
-check("Elegir la paleta Océano cambia el color principal y el fondo en toda la app", (await rootVar("--brand")) === "#0b6e99" && (await rootVar("--bg")) === "#f4f9fc", await rootVar("--brand"));
+check("La dirección #/apariencia ya no existe: cae al generador", (await p.evaluate(() => location.hash)) !== "" && (await p.$eval("main h1", (e) => e.textContent)).includes("Generador"), await p.evaluate(() => document.querySelector("main h1")?.textContent));
+
+setTheme("oceano", { radius: 18, font: "serif", logoUrl: `${AC}/brand/logo?v=7` });
+await reloadWait();
+check("Toma los colores del Agente Comercial: color principal y fondo (Océano)", (await rootVar("--brand")) === "#0b6e99" && (await rootVar("--bg")) === "#f4f9fc", await rootVar("--brand"));
 check("El fondo del <body> cambió de verdad", rgbOf(await css("body", "backgroundColor")).join() === "244,249,252", await css("body", "backgroundColor"));
-await shot("07-paleta-oceano");
-await p.reload({ waitUntil: "networkidle0" });
-check("La paleta se recuerda al recargar", (await rootVar("--brand")) === "#0b6e99");
-// El script de arranque aplica la paleta antes de que cargue la hoja de estilos (sin destello).
+check("Toma también las esquinas y el tipo de letra", (await css("main .card, .sidebar", "borderRadius")) !== "" && (await rootVar("--radius")) === "18px" && (await rootVar("--radius-sm")) === "14px" && (await css("body", "fontFamily")).includes("Georgia"), await css("body", "fontFamily"));
+check("Usa el logo propio del Agente Comercial en el menú", (await p.$eval(".brand img", (e) => e.getAttribute("src"))) === `${AC}/brand/logo?v=7`, await p.$eval(".brand img", (e) => e.getAttribute("src")));
+await shot("06-apariencia-oceano");
+const cached = await p.evaluate(() => JSON.parse(localStorage.getItem("pibox_remote_theme_v1")));
+check("Guarda la última apariencia leída (para pintar sin destello la próxima vez)", cached?.remote?.light?.brand === "#0b6e99" && !!cached?.cache?.dark);
+
+mock = { status: 500, body: "" };
+await reloadWait();
+check("Si el Agente Comercial falla, se queda con la última apariencia guardada", (await rootVar("--brand")) === "#0b6e99" && (await rootVar("--radius")) === "18px");
+mock = { status: 0, body: "" };
+await reloadWait();
+check("Sin conexión tampoco se pierde la apariencia guardada", (await rootVar("--brand")) === "#0b6e99");
+mock = { status: 200, body: "esto no es json" };
+await reloadWait();
+check("Una respuesta ilegible se ignora", (await rootVar("--brand")) === "#0b6e99");
+mock = { status: 200, body: { ...themeJson("bosque"), light: { ...PAL.bosque.l, brand: "url(javascript:alert(1))" } } };
+await reloadWait();
+check("Una respuesta con colores inválidos no se aplica (nunca se pasa texto libre al CSS)", (await rootVar("--brand")) === "#0b6e99" && !(await p.evaluate(() => document.documentElement.getAttribute("style"))).includes("javascript"));
+setTheme("oceano", { radius: 18, font: "serif", logoUrl: "https://evil.example/brand/logo" });
+await reloadWait();
+check("Un logo que no sale del Agente Comercial se ignora y queda el de siempre", (await p.$eval(".brand img", (e) => e.getAttribute("src"))) === "assets/logo-icon.png", await p.$eval(".brand img", (e) => e.getAttribute("src")));
+
+// Sin destello: el script de arranque aplica lo guardado ANTES de que cargue la hoja de estilos.
+mock = { status: 500, body: "" };
 const early = await b.newPage(); await early.setViewport({ width: 800, height: 600 }); await early.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "light" }]);
+await early.setRequestInterception(true); early.on("request", (rq) => (rq.url().startsWith(AC) ? rq.abort("failed") : rq.continue()));
 await early.evaluateOnNewDocument(() => { document.addEventListener("readystatechange", () => { if (!window.__earlyBrand && document.documentElement.style.getPropertyValue("--brand")) window.__earlyBrand = document.documentElement.style.getPropertyValue("--brand") + "@" + document.readyState; }); });
 await early.goto(BASE, { waitUntil: "load" });
 const earlyVal = await early.evaluate(() => window.__earlyBrand);
-check("El arranque aplica la paleta durante la carga (sin destello)", (earlyVal || "").startsWith("#0b6e99@"), earlyVal);
+check("El arranque aplica la apariencia guardada durante la carga (sin destello)", (earlyVal || "").startsWith("#0b6e99@"), earlyVal);
 await early.close();
-await go("apariencia");
-await tab("Oscuro");
-check("Modo oscuro: data-theme=dark, fondo oscuro y color principal claro", (await p.evaluate(() => document.documentElement.dataset.theme)) === "dark" && (await rootVar("--bg")) === "#0d1a22" && (await rootVar("--brand")) === "#5cc0ee");
-await shot("08-oscuro-oceano");
-await tab("Claro");
-check("Modo claro forzado vuelve a fondos claros", (await rootVar("--bg")) === "#f4f9fc");
 
-// Legibilidad de botón principal y menú activo en TODAS las paletas y ambos modos
-const nPresets = (await p.$$eval("main .palette-card", (c) => c.length)) - 1;
+// Modo oscuro / claro del sistema con «automático»
+setTheme("oceano");
+await reloadWait();
+await p.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "dark" }]); await sleep(300);
+check("Con modo automático y el sistema en oscuro: data-theme=dark, fondo oscuro y color principal claro", (await p.evaluate(() => document.documentElement.dataset.theme)) === "dark" && (await rootVar("--bg")) === "#0d1a22" && (await rootVar("--brand")) === "#5cc0ee", await rootVar("--bg"));
+await shot("07-oscuro-oceano");
+await p.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "light" }]); await sleep(300);
+check("Al volver el sistema a claro, la web vuelve a fondos claros", (await rootVar("--bg")) === "#f4f9fc");
+// Cambia en el Agente → se refleja en la siguiente carga
+setTheme("bosque");
+await reloadWait();
+check("Si el Agente Comercial cambia la apariencia, esta web la toma al recargar", (await rootVar("--brand")) === "#2f6b3a" && (await rootVar("--bg")) === "#f6faf4", await rootVar("--brand"));
+// Modo fijo del Agente: ignora al sistema
+mock = { status: 200, body: { ...themeJson("pibox", { scheme: "dark", dark: null }), light: PAL.pibox.d } };
+await reloadWait();
+check("Modo oscuro fijo en el Agente: esta web sigue oscura aunque el sistema sea claro", (await p.evaluate(() => document.documentElement.dataset.theme)) === "dark" && (await rootVar("--bg")) === "#16111c", await rootVar("--bg"));
+
+// Legibilidad de botón principal y menú activo en TODAS las paletas del Agente y ambos modos del sistema
 const bad = [];
-for (const mode of ["Claro", "Oscuro"]) {
-  for (let i = 0; i < nPresets; i++) {
-    await tab(mode);
-    await p.evaluate((k) => document.querySelectorAll("main .palette-card")[k].click(), i); await sleep(100);
-    const r = await p.evaluate(() => { const bt = document.querySelector("main .btn-primary"), nv = document.querySelector("#nav a[aria-current]"), cs = (e) => getComputedStyle(e); return { btn: [cs(bt).color, cs(bt).backgroundColor], nav: [cs(nv).color, cs(nv).backgroundColor], name: document.querySelector("main .palette-card[aria-pressed=true]").textContent }; });
-    for (const [what, [fg, bg]] of [["botón", r.btn], ["menú", r.nav]]) if (ratio(rgbOf(fg), rgbOf(bg)) < 4.5) bad.push(`${r.name}/${mode}/${what} ${fg} sobre ${bg}`);
+for (const [pal] of Object.entries(PAL)) {
+  setTheme(pal); await reloadWait();
+  for (const mode of ["light", "dark"]) {
+    await p.emulateMediaFeatures([{ name: "prefers-color-scheme", value: mode }]); await sleep(150);
+    const r = await p.evaluate(() => { const bt = document.querySelector("main .btn-primary") || document.querySelector("main .btn"), nv = document.querySelector("#nav a[aria-current]"), cs = (e) => getComputedStyle(e); return { btn: [cs(bt).color, cs(bt).backgroundColor], nav: [cs(nv).color, cs(nv).backgroundColor] }; });
+    for (const [what, [fg, bg]] of [["botón", r.btn], ["menú", r.nav]]) if (ratio(rgbOf(fg), rgbOf(bg)) < 4.5) bad.push(`${pal}/${mode}/${what} ${fg} sobre ${bg}`);
   }
 }
+await p.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "light" }]);
 check("Texto sobre botón principal y menú activo legible (≥4,5:1) en las 6 paletas × claro/oscuro", bad.length === 0, bad.join("\n"));
 
-// Personalizada (se parte de Pibox claro para que los valores sean conocidos)
-await tab("Claro"); await card("Pibox");
-await card("Personalizada");
-check("Personalizada parte de los colores actuales y muestra 10 selectores", (await p.$$eval("main input[type=color]", (e) => e.length)) === 10 && (await p.$eval("main input[type=color]", (e) => e.value)) === "#5b2a86");
-const hexes = await p.$$("main .color-row input[type=text]");
-await typeInto(hexes[0], "#d6246e");
-check("Escribir un color hex cambia el color principal al instante", (await rootVar("--brand")) === "#d6246e", await rootVar("--brand"));
-check("El selector de color se sincroniza con el texto", (await p.$eval("main input[type=color]", (e) => e.value)) === "#d6246e");
-check("Se aplica a los botones reales", rgbOf(await css("main .btn-primary", "backgroundColor")).join() === "214,36,110", await css("main .btn-primary", "backgroundColor"));
-await typeInto(hexes[0], "rojo");
-check("Un código inválido se marca y no rompe el tema", (await hexes[0].evaluate((e) => e.getAttribute("aria-invalid"))) === "true" && (await rootVar("--brand")) === "#d6246e");
-await typeInto(hexes[0], "#d6246e");
-await shot("09-personalizada");
-// Texto ilegible → aviso
-check("Con colores legibles no hay aviso", (await p.$$("main .alert.warn")).length === 0);
-await typeInto(hexes[4], "#faf8fc");
-check("Texto casi igual al fondo → aviso de legibilidad", (await p.$$eval("main .alert.warn", (e) => e.map((x) => x.textContent).join())).includes("texto"));
-await shot("10-aviso-legibilidad");
-await typeInto(hexes[4], "#231a2e");
-check("Al corregirlo el aviso desaparece", (await p.$$("main .alert.warn")).length === 0);
-await p.reload({ waitUntil: "networkidle0" });
-check("La paleta personalizada se recuerda", (await rootVar("--brand")) === "#d6246e");
-
-// Tamaño y esquinas
-await go("apariencia");
-await tab("Grande");
-check("Letra «Grande» = 17 px", (await css("body", "fontSize")) === "17px", await css("body", "fontSize"));
-await tab("Muy grande");
-check("Letra «Muy grande» = 19 px y sin scroll horizontal", (await css("body", "fontSize")) === "19px" && !(await hscroll()));
-await tab("Redondeadas");
-check("Esquinas redondeadas cambian botones y tarjetas", (await css("main .btn", "borderRadius")) === "14px" && (await css("main .card", "borderRadius")) === "18px", await css("main .btn", "borderRadius"));
-await shot("11-letra-grande-redondeado");
-// Ayudas desactivables
+// Enlaces con el Agente Comercial y ayudas
+setTheme("pibox"); await reloadWait();
+const foot = await p.$eval("#sideFoot a.side-link", (a) => ({ href: a.href, target: a.target, rel: a.rel }));
+check("El menú trae un enlace «Volver al Agente Comercial» que abre en otra pestaña", foot.href.startsWith(AC) && foot.target === "_blank" && foot.rel.includes("noopener"), JSON.stringify(foot));
+await go("configuracion");
+const cfgLink = await p.$$eval("main a.btn", (a) => a.map((x) => ({ t: x.textContent, h: x.href, tg: x.target })).find((x) => /apariencia/i.test(x.t)));
+check("Configuración explica que la apariencia se cambia en el Agente Comercial y enlaza allá", !!cfgLink && cfgLink.h === `${AC}/apariencia` && cfgLink.tg === "_blank", JSON.stringify(cfgLink));
+await shot("08-configuracion-apariencia");
+// Ayudas desactivables (ahora en Configuración)
 await p.click("#tipsChk"); await sleep(100);
 await p.hover("#nav a[href='#/informes']"); await sleep(200);
-check("Desactivar ayudas flotantes oculta los globos", await p.evaluate(() => document.getElementById("tip-pop").hidden));
+check("Desactivar ayudas flotantes (en Configuración) oculta los globos", await p.evaluate(() => document.getElementById("tip-pop").hidden));
+await reloadWait();
+await go("configuracion");
+check("La casilla de ayudas sigue desmarcada tras recargar", (await p.$eval("#tipsChk", (e) => e.checked)) === false);
 await p.click("#tipsChk"); await sleep(100);
-// Restablecer
-await clickText("Restablecer apariencia");
-await p.evaluate(() => [...document.querySelectorAll("dialog button")].find((x) => x.textContent === "Restablecer").click()); await sleep(250);
-check("Restablecer apariencia vuelve al morado Pibox, letra 15 px y esquinas normales", (await rootVar("--brand")) === "#5b2a86" && (await css("body", "fontSize")) === "15px" && (await css("main .card", "borderRadius")) === "10px", await rootVar("--brand"));
+check("Volver a activarlas la deja marcada y no marca la configuración como «sin guardar»", (await p.$eval("#tipsChk", (e) => e.checked)) === true && !(await p.evaluate(() => !!window.__pibox.dirty?.())));
+// Datos viejos: quien tenía una apariencia local personalizada no la conserva (manda la del Agente)
+await p.evaluate(() => localStorage.setItem("pibox_ui_prefs_v1", JSON.stringify({ prefs: { palette: "custom", mode: "dark", custom: { brand: "#d6246e" } }, cache: { dark: { vars: { "--brand": "#d6246e" }, scheme: "dark" }, light: { vars: { "--brand": "#d6246e" }, scheme: "light" } } })));
+await reloadWait();
+check("Una apariencia local antigua ya no se aplica: manda la del Agente Comercial", (await rootVar("--brand")) === "#5b2a86", await rootVar("--brand"));
 
 // ---------- Tutorial ----------
 await go("tutorial");
-check("Tutorial: 10 pasos con enlace a su sección", (await p.$$eval("main ol.steps li", (e) => e.length)) === 10 && (await p.$$eval("main ol.steps a", (a) => a.every((x) => x.getAttribute("href").startsWith("#/")))));
+check("Tutorial: 9 pasos con enlace a su sección", (await p.$$eval("main ol.steps li", (e) => e.length)) === 9 && (await p.$$eval("main ol.steps a", (a) => a.every((x) => x.getAttribute("href").startsWith("#/")))));
 await shot("12-tutorial");
 await clickText("▶ Iniciar recorrido guiado"); await sleep(200);
 const coach = await p.$eval(".coach", (e) => e.textContent).catch(() => "");
-check("Recorrido guiado: abre en el paso 1 señalando el botón del menú", coach.includes("Paso 1 de 12") && coach.includes("Contraer o expandir"), coach.slice(0, 60));
+check("Recorrido guiado: abre en el paso 1 señalando el botón del menú", coach.includes("Paso 1 de 11") && coach.includes("Contraer o expandir"), coach.slice(0, 60));
 check("Resalta el elemento que explica", await p.$eval("#navToggle", (e) => e.classList.contains("tour-focus")));
 await shot("13-recorrido");
 const seen = [coach];
-for (let i = 0; i < 11; i++) { await clickText("Siguiente →", ".coach"); seen.push(await p.$eval(".coach", (e) => e.textContent).catch(() => "")); }
-check("Recorre las 10 opciones del menú y el botón de ayuda", ["Generador de mensajes", "Apariencia", "Buzón de ideas", "Ayuda de cada sección"].every((t) => seen.some((s) => s.includes(t))), seen.map((s) => s.slice(0, 20)).join("|"));
+for (let i = 0; i < 10; i++) { await clickText("Siguiente →", ".coach"); seen.push(await p.$eval(".coach", (e) => e.textContent).catch(() => "")); }
+check("Recorre las 9 opciones del menú y el botón de ayuda", ["Generador de mensajes", "Buzón de ideas", "Ayuda de cada sección"].every((t) => seen.some((s) => s.includes(t))), seen.map((s) => s.slice(0, 20)).join("|"));
 check("La tarjeta del recorrido siempre queda dentro de la pantalla", await p.$eval(".coach", (e) => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; }));
 await clickText("Terminar", ".coach"); await sleep(100);
 check("Terminar cierra el recorrido y quita el resaltado", !(await p.$(".coach")) && !(await p.$(".tour-focus")));
@@ -233,7 +273,7 @@ for (const w of [390, 768, 1366]) {
   const overflow = [];
   for (const collapsed of [false, true]) {
     await p.evaluate((c) => { if (c) document.documentElement.setAttribute("data-nav", "collapsed"); else document.documentElement.removeAttribute("data-nav"); }, collapsed);
-    for (const r of ["generador", "apariencia", "tutorial", "ideas", "configuracion"]) { await go(r); if (await hscroll()) overflow.push(`${r}${collapsed ? "(contraído)" : ""}`); }
+    for (const r of ["generador", "tutorial", "ideas", "configuracion"]) { await go(r); if (await hscroll()) overflow.push(`${r}${collapsed ? "(contraído)" : ""}`); }
   }
   check(`Sin scroll horizontal a ${w}px en las pantallas nuevas (expandido y contraído)`, overflow.length === 0, overflow.join(","));
 }

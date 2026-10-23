@@ -37,6 +37,8 @@ a { color: var(--brand); }
 .nav a[aria-current="page"] { background: var(--brand); color: var(--on-brand); }
 .nav .ico { width: 1.25rem; text-align: center; }
 .side-foot { margin-top: auto; font-size: .78rem; color: var(--muted); padding: 0 .5rem; }
+.side-link { display: block; margin-top: .6rem; color: var(--brand); font-weight: 600; text-decoration: none; }
+.side-link:hover { text-decoration: underline; }
 .main { padding: 1.5rem clamp(1rem, 3vw, 2.25rem) 3rem; max-width: 1280px; width: 100%; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
 .page-head p { color: var(--muted); margin: 0; }

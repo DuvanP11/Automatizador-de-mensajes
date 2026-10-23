@@ -151,7 +151,7 @@ export const HELP = {
     adjust: [
       "El saludo puede ser automático (según la hora de Colombia) o manual.",
       "El indicativo de país se usa solo al abrir WhatsApp.",
-      "La apariencia (colores, tamaño de letra) se cambia en la sección «Apariencia».",
+      "La apariencia (colores, modo claro u oscuro, formas, logo) la define el Agente Comercial y se aplica aquí sola. Para cambiarla usa el enlace de esta página.",
     ],
     controls: [
       { match: "Guardar configuración", tip: "Aplica los cambios. Si sales sin guardar, la aplicación te avisa." },
@@ -159,21 +159,6 @@ export const HELP = {
       { match: "Borrar todos los datos…", tip: "Elimina todo de este navegador. Pide escribir BORRAR para confirmar." },
       { match: "Zonas disponibles (una por línea)", tip: "Las zonas que aparecen en el Generador y en los filtros." },
     ],
-  },
-  apariencia: {
-    short: "Cambia colores, tamaño de letra y esquinas de toda la aplicación.",
-    summary: "Personaliza cómo se ve la aplicación en tu navegador. Los cambios se aplican al instante y se recuerdan; no afectan a otros comerciales.",
-    steps: [
-      "Elige el modo: claro, oscuro o automático (sigue a tu computador).",
-      "Prueba una paleta lista, o elige «Personalizada» para ajustar cada color.",
-      "Ajusta el tamaño de la letra y la forma de las esquinas.",
-      "Si algo queda ilegible, «Restablecer apariencia» vuelve al diseño original.",
-    ],
-    adjust: [
-      "En la paleta personalizada cada color afecta una parte distinta; el aviso de legibilidad te dice si algo queda difícil de leer.",
-      "Los tonos derivados (hover, fondos de alertas) se calculan solos a partir de tus colores.",
-    ],
-    controls: [],
   },
   tutorial: {
     short: "Recorrido paso a paso para aprender a usar la aplicación.",
@@ -200,7 +185,6 @@ export const TUTORIAL = [
   { path: "comunicados", title: "Envía un comunicado con imagen o video", text: "Adjunta el archivo, escribe 2 o más redacciones, marca los clientes y prepara la cola. Se envía de a uno, con una pausa al azar entre cada cliente y un tope diario.", tip: "Prueba primero con un cliente tuyo para ver cómo queda el texto junto a la imagen." },
   { path: "seguimiento", title: "Haz seguimiento", text: "Cambia el estado de cada cliente, fija la próxima fecha de contacto y deja notas. Los vencidos se resaltan para que nadie se quede sin respuesta.", tip: "«Solo seguimientos vencidos» es tu lista de pendientes del día." },
   { path: "informes", title: "Mide tu gestión", text: "Los informes se calculan con tus datos. Cada indicador explica qué mide, y puedes descargar todo en Excel.", tip: "Los filtros cambian las cifras y también el Excel descargado." },
-  { path: "apariencia", title: "Personaliza la apariencia", text: "Cambia colores, tamaño de letra y esquinas. Es solo para tu navegador y se aplica al instante.", tip: "«Restablecer apariencia» te devuelve al diseño original." },
   { path: "configuracion", title: "Descarga un respaldo", text: "Tus datos viven solo en este navegador: no hay servidor ni copia automática. Descarga el respaldo con frecuencia y guárdalo fuera del navegador.", tip: "El menú lateral te dice hace cuántos días fue el último." },
   { path: "ideas", title: "Cuéntanos qué mejorar", text: "Si algo te estorba o se te ocurre una mejora, anótalo en el buzón de ideas.", tip: "Puedes enviarlas por correo o descargarlas." },
 ];

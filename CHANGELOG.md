@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.4.0 — Apariencia compartida con el Agente Comercial
+- **La apariencia ahora se define en el Agente Comercial** y esta web la toma de allá: colores, modo claro/oscuro/automático, esquinas, tipo de letra y logo propio. Se lee de `https://agente-comercial-xi.vercel.app/api/public/theme` (solo colores y formas, sin datos de nadie), se **valida** (colores `#rrggbb`, listas cerradas, logo solo si sale del propio Agente) y se aplica al abrir o recargar.
+- Si el Agente no responde (sin internet, caído, respuesta inválida) la web **sigue funcionando** con la última apariencia guardada o, si nunca la leyó, con el diseño de fábrica. Se pinta sin destello gracias al script de arranque.
+- **Se quita la sección «Apariencia»** del menú (queda en 9 opciones) y el Tutorial pasa a 9 pasos. Las ayudas flotantes se activan o desactivan ahora en **Configuración**. Quien tenía una apariencia local personalizada ya no la conserva: manda la del Agente.
+- Enlaces entre ambas webs: «← Volver al Agente Comercial» en el menú y, en Configuración, «Cambiar la apariencia en el Agente Comercial».
+- La CSP (`index.html` y `vercel.json`) permite conectar y cargar imágenes **solo** desde el origen del Agente Comercial.
+- 7 pruebas unitarias nuevas (`tests/remote-theme.test.js`) y `e2e/ui.mjs` reescrito para la apariencia compartida (Agente simulado).
+
 ## 2.3.0 — Comunicados con imagen o video
 - **Comunicados (nueva sección):** adjunta una imagen o un video (hasta 16 MB, guardado solo en este navegador), escribe de 2 a 6 redacciones y elige los clientes. Cada cliente recibe una redacción distinta a la del anterior; dentro de cada una siguen funcionando las variables y las alternativas `[[a|b]]`.
 - **Clientes:** tabla con búsqueda y filtros por comercial y zona, «seleccionar todos» y botón para **adjuntar más clientes con sus teléfonos desde Excel** (importador existente). Se omiten sin teléfono válido, números repetidos y, si se quiere, los «No interesado».
