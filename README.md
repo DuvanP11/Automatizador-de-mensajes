@@ -14,7 +14,7 @@ Herramienta comercial interna para preparar mensajes de WhatsApp personalizados,
 | **Seguimiento comercial** | Estado por cliente, fechas de último contacto y próximo seguimiento, comercial responsable, notas con historial, filtros y alertas de vencidos. |
 | **Informes gerenciales** | Indicadores calculados con datos reales, filtros y descarga de Excel (4 hojas). |
 | **Configuración** | Nombre/cargo del comercial, oferta (modelo, tarifa, franja…), saludo, zonas, indicativo de país, estados de seguimiento, correo del buzón de ideas, respaldo y restauración. |
-| **Apariencia** | Modo claro/oscuro/automático, 6 paletas listas o una **personalizada** (10 colores; todo lo demás se deriva) con aviso de legibilidad, tamaño de letra, forma de esquinas y activar/desactivar las ayudas flotantes. Se guarda por navegador y se aplica antes de pintar (sin destello). |
+| **Apariencia (compartida)** | Ya no se elige aquí: la define el **Agente Comercial** (colores, modo claro/oscuro, esquinas, letra y logo) y esta web la copia sola al abrirse o recargarse (`/api/public/theme`). Si el Agente no responde, se queda con la última apariencia guardada o con el diseño de fábrica. Aquí solo queda activar/desactivar las ayudas flotantes (en Configuración) y un enlace para ir a cambiarla allá. |
 | **Tutorial** | Guía paso a paso y **recorrido guiado** que señala cada opción del menú. |
 | **Buzón de ideas** | Cada persona anota mejoras (título, detalle, sección, importancia). Quedan en el navegador; se envían por correo (`mailto:`, al destinatario de Configuración) o se descargan en Excel. |
 

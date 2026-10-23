@@ -7,11 +7,11 @@ import { renderTemplates } from "./templates.js";
 import { renderFollowup } from "./followup.js";
 import { renderReports } from "./reports.js";
 import { renderSettings } from "./settings.js";
-import { renderAppearance } from "./appearance.js";
 import { renderTutorial } from "./tutorial.js";
 import { renderIdeas } from "./ideas.js";
 import { HELP } from "../core/help.js";
 import { initPrefs, getPrefs, updatePrefs, subscribePrefs } from "./prefs.js";
+import { AGENTE_COMERCIAL_URL } from "../core/links.js";
 import { initTips, applyControlTips, mountHelpButton, setHelpSection, closeHelp } from "./tips.js";
 
 const ROUTES = [
@@ -22,7 +22,6 @@ const ROUTES = [
   { path: "seguimiento", label: "Seguimiento comercial", ico: "📌", render: renderFollowup },
   { path: "informes", label: "Informes gerenciales", ico: "📊", render: renderReports },
   { path: "configuracion", label: "Configuración", ico: "⚙", render: renderSettings },
-  { path: "apariencia", label: "Apariencia", ico: "🎨", render: renderAppearance },
   { path: "tutorial", label: "Tutorial", ico: "🎓", render: renderTutorial },
   { path: "ideas", label: "Buzón de ideas", ico: "💡", render: renderIdeas },
 ];
@@ -60,6 +59,7 @@ function drawFoot() {
   foot.replaceChildren(
     h("div", { text: `${s.clients.length} clientes guardados en este navegador` }),
     h("div", { text: days === null ? "Sin respaldo descargado" : `Último respaldo: hace ${days} d` }),
+    h("a", { class: "side-link", href: AGENTE_COMERCIAL_URL, target: "_blank", rel: "noopener", text: "← Volver al Agente Comercial ↗", "data-tip": "Abre el Agente Comercial en otra pestaña. La apariencia de esta web se cambia allá." }),
   );
 }
 
