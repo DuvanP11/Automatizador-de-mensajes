@@ -6,7 +6,7 @@ Estados usados: **APROBADO**, **FALLIDO**, **NO EJECUTADO**, **PENDIENTE**.
 Se evolucionó la aplicación existente (sitio estático) sin backend ni framework: clientes con directorio de contactos y sincronización desde Excel, configuración comercial, plantillas con variables, seguimiento con historial, informes con exportación a Excel e identidad visual propia. Los 14 criterios de aceptación están cubiertos en código y verificados con **43 pruebas unitarias y 72 comprobaciones en Chrome real, todas APROBADAS** (ver §6). Quedan limitaciones declaradas (§8): datos locales de un solo navegador, sin autenticación, y varias verificaciones que no pude ejecutar.
 
 ## 2. Estado inicial (auditoría)
-- Sitio estático: `index.html`, `css/styles.css` (1 línea), `js/app.js` (17 líneas minificadas), `data/clientes.json` (105 clientes: id, cliente, localidad). Sin backend, API ni almacenamiento: **todo se perdía al recargar**.
+- Sitio estático: `index.html`, `css/styles.css` (1 línea), `js/app.js` (17 líneas minificadas), (la base incluida `data/clientes.json` fue retirada el 2026-10-23: ya no hay datos de clientes en el repositorio). Sin backend, API ni almacenamiento: **todo se perdía al recargar**.
 - Excel por SheetJS 0.18.5 desde CDN; solo la primera hoja; columnas por una lista fija de nombres.
 - Datos fijos en el código: nombre «Duvan Perilla», cargo, `$10.500 COP`, franja, saludo «Buenos días» fijo.
 - Mensaje con `**negrita**` (no válida en WhatsApp), variaciones aleatorias, dos campos de emoji con `maxlength=4`.
@@ -41,7 +41,7 @@ Persistencia: `localStorage` (clave `pibox_automatizador_v2`) + respaldo JSON. J
 - **Creados:** `js/core/*` (7), `js/ui/*` (8), `assets/*` (7), `vendor/xlsx.full.min.js` + licencia, `tests/*` (2), `e2e/*` (2), `CHANGELOG.md`, `INFORME_IMPLEMENTACION.md`, `.gitignore`, `package-lock.json`.
 - **Modificados:** `index.html`, `css/styles.css`, `package.json`, `vercel.json` (cabeceras de seguridad), `README.md`.
 - **Eliminado:** `js/app.js` (reemplazado; tenía el `innerHTML` sin escapar). Recuperable desde Git.
-- **No se tocó:** `data/clientes.json`.
+- **No se tocó:** la base incluida (retirada después, el 2026-10-23).
 - **Dependencias:** ninguna de ejecución. Dev: `xlsx@0.20.3` (para las pruebas). `puppeteer-core` solo con `--no-save` para el e2e. SheetJS pasó de CDN 0.18.5 a copia local 0.20.3 (la 0.18.5 tiene avisos de seguridad conocidos).
 
 ## 6. Pruebas y resultados
@@ -111,4 +111,4 @@ Validación manual sugerida: importar `e2e/mkfx.mjs` → archivos ficticios; en 
 - **Excel sin teléfonos/correos** (no son necesarios para el objetivo gerencial).
 - **Hora de Colombia** con `Intl` y `America/Bogota` para saludo y fechas.
 - **Alternativas de redacción** (`[[a|b]]`) visibles y controladas por el usuario; no hay aleatoriedad oculta ni intención de eludir filtros.
-- **Privacidad:** el procesamiento de Excel ocurre en el navegador; no hay envíos a servicios externos ni a IA. `data/clientes.json` (nombres de empresas) ya era público en el repositorio: considera retirarlo de un repo público.
+- **Privacidad:** el procesamiento de Excel ocurre en el navegador; no hay envíos a servicios externos ni a IA. La web no incluye ninguna base de clientes (se retiró el 2026-10-23).

@@ -1,4 +1,4 @@
-import { createStore, seedClients } from "../core/store.js";
+import { createStore } from "../core/store.js";
 import { h, toast, confirmDialog } from "./dom.js";
 import { renderGenerator } from "./generator.js";
 import { renderBroadcast } from "./broadcast.js";
@@ -96,14 +96,9 @@ async function init() {
   mountHelpButton((p) => ctx.navigate(p));
   store.load();
   if (store.persistError) toast(store.persistError, "err", 6000);
-  if (!store.state.seeded) {
-    // Primera vez: base inicial incluida en el repositorio (solo nombre, ID y localidad).
-    let seed = [];
-    if (!store.state.clients.length) {
-      try { const res = await fetch("data/clientes.json"); if (res.ok) seed = await res.json(); } catch { /* sin base inicial */ }
-    }
-    store.commit((d) => { if (!d.clients.length) d.clients = seedClients(seed, d.config.zones); d.seeded = true; });
-  }
+  // Sin base inicial: cada persona carga sus propios clientes (Clientes y contactos → «Agregar o sincronizar clientes»).
+  // Ningún dato de clientes viaja con el código de la web ni con el repositorio.
+  if (!store.state.seeded) store.commit((d) => { d.seeded = true; });
   store.subscribe(drawFoot);
   window.addEventListener("hashchange", route);
   window.addEventListener("beforeunload", (e) => { if (ctx.dirty?.()) { e.preventDefault(); e.returnValue = ""; } });

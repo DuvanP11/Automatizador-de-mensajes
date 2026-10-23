@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import { seedFake } from "./fake-base.mjs";
 XLSX.set_fs(fs);
 const D = process.env.E2E_DIR || fs.mkdtempSync(path.join(os.tmpdir(), "pibox-e2e-"));
 fs.mkdirSync(D + "/dl", { recursive: true }); fs.mkdirSync(D + "/fx", { recursive: true });
@@ -39,8 +40,9 @@ const text = (sel) => p.$eval(sel, (e) => e.value ?? e.textContent);
 
 // ---------- Arranque limpio ----------
 await p.goto(BASE); await p.evaluate(() => localStorage.clear()); await p.reload(); await sleep(500);
+await seedFake(p); await sleep(200);
 let s = await st();
-check("Base inicial sembrada desde data/clientes.json (105 clientes)", s.clients.length === 105, s.clients.length);
+check("Base ficticia de pruebas cargada (105 clientes)", s.clients.length === 105, s.clients.length);
 check("Zona 'Los martires' normalizada a 'Los Mártires'", s.clients.some((c) => c.zone === "Los Mártires"));
 check("Logo del encabezado carga (naturalWidth>0)", await p.$eval(".brand img", (i) => i.complete && i.naturalWidth > 0));
 check("Favicon declarado y accesible", (await p.$$eval('link[rel~="icon"]', (l) => l.map((x) => x.href))).length >= 2);
@@ -85,12 +87,12 @@ await sleep(150);
 await clickText("Confirmar importación (3 filas con cambios)", "dialog");
 await sleep(300);
 s = await st();
-const adl = s.clients.find((c) => c.id === "ADL001"), amb = s.clients.find((c) => c.id === "AMB001"), fan = s.clients.find((c) => c.id === "FAN001");
-check("Relación por ID: ADL001 recibe teléfono y correo", adl.contacts[0]?.phone === "3001234567" && adl.contacts[0]?.email === "ventas@adl.test", JSON.stringify(adl.contacts));
-check("Relación por nombre normalizado (sin ID, mayúsculas/espacios/tildes): AMB001 recibe teléfono", amb.contacts[0]?.phone === "3109876543", JSON.stringify(amb?.contacts));
+const adl = s.clients.find((c) => c.id === "ALF001"), amb = s.clients.find((c) => c.id === "DEM001"), fan = s.clients.find((c) => c.id === "FAN001");
+check("Relación por ID: ALF001 recibe teléfono y correo", adl.contacts[0]?.phone === "3001234567" && adl.contacts[0]?.email === "ventas@alfa.test", JSON.stringify(adl.contacts));
+check("Relación por nombre normalizado (sin ID, mayúsculas/espacios/tildes): DEM001 recibe teléfono", amb.contacts[0]?.phone === "3109876543", JSON.stringify(amb?.contacts));
 check("Revisión resuelta: cliente nuevo creado desde directorio", fan?.contacts[0]?.phone === "3205550000");
 check("Sin duplicar clientes existentes (105 + 1)", s.clients.length === 106, s.clients.length);
-check("Fila con teléfono inválido no modificó a Airtempe", s.clients.find((c) => c.id === "AIR001").contacts.length === 0);
+check("Fila con teléfono inválido no modificó a Aire Demo", s.clients.find((c) => c.id === "AIR001").contacts.length === 0);
 
 // ---------- Importar base: ceros iniciales ----------
 await clickText("Agregar o sincronizar clientes", "main", 0); await p.waitForSelector("dialog[open]");
@@ -112,14 +114,14 @@ await p.evaluate(() => document.querySelector("dialog[open]").close());
 
 // ---------- Generador ----------
 await go("generador");
-await p.type("#gsearch", "ADL");
+await p.type("#gsearch", "Alfa");
 await sleep(150);
 await p.keyboard.press("ArrowDown"); await p.keyboard.press("Enter"); await sleep(250);
-check("Búsqueda con teclado selecciona cliente y carga nombre/ID", (await text("#gsearch")).includes("ADL") && (await p.$$eval('input[readonly]', (i) => i.map((x) => x.value))).includes("ADL001"));
-check("Teléfono y correo cargan automáticamente", (await text("#gphone")) === "3001234567" && (await p.$$eval('input[readonly]', (i) => i.map((x) => x.value))).includes("ventas@adl.test"));
+check("Búsqueda con teclado selecciona cliente y carga nombre/ID", (await text("#gsearch")).includes("Alfa") && (await p.$$eval('input[readonly]', (i) => i.map((x) => x.value))).includes("ALF001"));
+check("Teléfono y correo cargan automáticamente", (await text("#gphone")) === "3001234567" && (await p.$$eval('input[readonly]', (i) => i.map((x) => x.value))).includes("ventas@alfa.test"));
 check("Pista: WhatsApp se abrirá con +573001234567", (await p.$eval("#gphone-h", (e) => e.textContent)).includes("+573001234567"));
 let msg = await text("#gmsg");
-check("Mensaje incluye cliente, comercial, cargo y tarifa", msg.includes("ADL importaciones SAS") && msg.includes("Juliana Rojas, Account Manager") && msg.includes("$10.500 COP"), msg);
+check("Mensaje incluye cliente, comercial, cargo y tarifa", msg.includes("Alfa Demo Logística SAS") && msg.includes("Juliana Rojas, Account Manager") && msg.includes("$10.500 COP"), msg);
 check("Zona 'Chapinero' (del cliente) aparece en el mensaje", msg.includes("para la zona de Chapinero:"), msg);
 check("Sin llaves visibles", !/\{\{|\}\}|\[\[|\]\]/.test(msg));
 const zoneSel = await p.evaluateHandle(() => [...document.querySelectorAll("label")].find((l) => l.textContent.startsWith("Zona")).control);
@@ -143,7 +145,7 @@ await clickText("Regenerar desde plantilla"); await p.waitForSelector("dialog[op
 check("Regenerar vuelve al texto de la plantilla", !(await text("#gmsg")).includes("EDITADO A MANO") && (await text("#gmsg")).includes("zona de Chapinero"));
 // Variar redacción
 const before = await text("#gmsg"); await clickText("Variar redacción"); const after = await text("#gmsg");
-check("Variar redacción cambia la frase conservando tarifa y datos", before !== after && after.includes("$10.500 COP") && after.includes("ADL importaciones SAS"));
+check("Variar redacción cambia la frase conservando tarifa y datos", before !== after && after.includes("$10.500 COP") && after.includes("Alfa Demo Logística SAS"));
 // Emojis
 await clickText("😊 Emojis"); await p.waitForSelector(".emoji-pop");
 await p.type(".emoji-pop input", "camion"); await sleep(150);
@@ -160,7 +162,7 @@ await clickText("Abrir en WhatsApp");
 const url = await p.evaluate(() => window.__opened);
 check("WhatsApp: URL con teléfono correcto (57 + número) y mensaje codificado", url?.startsWith("https://api.whatsapp.com/send/?phone=573001234567&text=") && decodeURIComponent(url.split("text=")[1].split("&")[0]) === (await text("#gmsg")), url);
 s = await st();
-const fu = s.followups[s.clients.find((c) => c.id === "ADL001").uid];
+const fu = s.followups[s.clients.find((c) => c.id === "ALF001").uid];
 check("Abrir WhatsApp registra 'primer contacto' en seguimiento", fu?.status === "primer_contacto" && fu.history.length >= 1 && fu.owner === "Juliana Rojas", JSON.stringify(fu));
 // Teléfono inválido bloquea
 await setVal("#gphone", "123");
@@ -203,12 +205,12 @@ check("Eliminar con confirmación; queda una predeterminada", s.templates.length
 
 // ---------- Seguimiento ----------
 await go("seguimiento");
-await setVal("#fq", "Airtempe"); await sleep(150);
-await p.evaluate(() => { const s = document.querySelector('select[aria-label^="Estado de Airtempe"]'); s.value = "interesado"; s.dispatchEvent(new Event("change", { bubbles: true })); });
+await setVal("#fq", "Aire Demo"); await sleep(150);
+await p.evaluate(() => { const s = document.querySelector('select[aria-label^="Estado de Aire Demo"]'); s.value = "interesado"; s.dispatchEvent(new Event("change", { bubbles: true })); });
 await sleep(200);
 s = await st(); const air = s.followups[s.clients.find((c) => c.id === "AIR001").uid];
 check("Actualizar estado inline crea registro con historial", air.status === "interesado" && air.history.some((e) => e.type === "status" && e.to === "interesado") && air.lastContactAt);
-await setVal('input[aria-label^="Próximo seguimiento de Airtempe"]', "2020-01-01"); await sleep(200);
+await setVal('input[aria-label^="Próximo seguimiento de Aire Demo"]', "2020-01-01"); await sleep(200);
 check("Seguimiento vencido marcado (badge y KPI)", (await p.$$eval(".badge.err", (b) => b.map((x) => x.textContent))).includes("Vencido") && (await p.$$eval(".kpi b", (b) => b.map((x) => x.textContent)))[2] === "1");
 await clickText("Detalle", "main"); await p.waitForSelector("dialog[open]");
 await p.evaluate(() => { const t = document.querySelector("dialog[open] textarea"); t.value = "Pidió cotización por correo"; });
@@ -216,7 +218,7 @@ await clickText("Guardar seguimiento", "dialog"); await sleep(250);
 s = await st(); const air2 = s.followups[s.clients.find((c) => c.id === "AIR001").uid];
 check("Nota agregada sin perder historial previo", air2.history.length >= 3 && air2.history.some((e) => e.note === "Pidió cotización por correo") && air2.history.some((e) => e.type === "status"));
 // No interesado exige motivo (el cambio inline abre el detalle y no guarda a medias)
-await p.evaluate(() => { const s = document.querySelector('select[aria-label^="Estado de Airtempe"]'); s.value = "no_interesado"; s.dispatchEvent(new Event("change", { bubbles: true })); });
+await p.evaluate(() => { const s = document.querySelector('select[aria-label^="Estado de Aire Demo"]'); s.value = "no_interesado"; s.dispatchEvent(new Event("change", { bubbles: true })); });
 await p.waitForSelector("dialog[open]");
 await clickText("Guardar seguimiento", "dialog");
 check("Estado 'No interesado' exige motivo y no se guarda a medias", (await p.$eval("dialog[open]", (d) => d.textContent)).includes("Indica el motivo") && (await st()).followups[(await st()).clients.find((c) => c.id === "AIR001").uid].status === "interesado");
@@ -239,12 +241,12 @@ check("Modo directo explica cómo funciona y ofrece Excel de ejemplo", (await p.
 await (await p.$("#impfile")).uploadFile(D + "/fx/telefonos_parecidos.xlsx");
 await p.waitForSelector("dialog[open] .kpi");
 const opts = await p.$$eval('dialog[open] select[aria-label^="Decisión"] option', (o) => o.map((x) => x.textContent));
-check("Nombre casi igual → sugiere el cliente parecido (no lo fusiona solo)", opts.some((o) => o.includes("Es el mismo que: ADL importaciones SAS")), JSON.stringify(opts));
+check("Nombre casi igual → sugiere el cliente parecido (no lo fusiona solo)", opts.some((o) => o.includes("Es el mismo que: Alfa Demo Logística SAS")), JSON.stringify(opts));
 await p.evaluate(() => { const sel = document.querySelector('dialog[open] select[aria-label^="Decisión"]'); sel.value = [...sel.options].find((o) => o.textContent.includes("Es el mismo que")).value; sel.dispatchEvent(new Event("change", { bubbles: true })); });
 await sleep(150);
 await clickText("Confirmar importación (1 filas con cambios)", "dialog"); await sleep(300);
 s = await st();
-check("Al confirmar, el teléfono queda como contacto del cliente elegido", s.clients.find((c) => c.id === "ADL001").contacts.some((c) => c.phone === "3112223344"));
+check("Al confirmar, el teléfono queda como contacto del cliente elegido", s.clients.find((c) => c.id === "ALF001").contacts.some((c) => c.phone === "3112223344"));
 
 // ---------- Excel con varios números por celda (forma del archivo real) ----------
 await go("clientes");
@@ -262,18 +264,18 @@ await clickText("Descargar reporte de errores", "dialog"); await sleep(400);
 const nApply = await p.$$eval("dialog[open] button", (b) => b.find((x) => x.textContent.startsWith("Confirmar importación"))?.textContent);
 await p.evaluate(() => [...document.querySelectorAll("dialog[open] button")].find((x) => x.textContent.startsWith("Confirmar importación")).click()); await sleep(400);
 s = await st();
-const adl2 = s.clients.find((c) => c.id === "ADL001");
-check("Varios números → varios contactos del mismo cliente (ADL: 5 nuevos + los previos)", ["3123806392", "3133269056", "3142819248", "3166924463", "3218402214"].every((n) => adl2.contacts.some((c) => c.phone === n)), JSON.stringify(adl2.contacts.map((c) => c.phone)));
-const rent = s.clients.find((c) => c.name === "Alfred Rent Corporativo");
-check("Número basura 0000000000 omitido, los válidos guardados", rent.contacts.map((c) => c.phone).join() === "3002363980,3003232326", JSON.stringify(rent?.contacts));
+const adl2 = s.clients.find((c) => c.id === "ALF001");
+check("Varios números → varios contactos del mismo cliente (Alfa: 5 nuevos + los previos)", ["3045550101", "3045550102", "3045550103", "3045550104", "3045550105"].every((n) => adl2.contacts.some((c) => c.phone === n)), JSON.stringify(adl2.contacts.map((c) => c.phone)));
+const rent = s.clients.find((c) => c.name === "Rent Demo Corporativo");
+check("Número basura 0000000000 omitido, los válidos guardados", rent.contacts.map((c) => c.phone).join() === "3045550106,3045550107", JSON.stringify(rent?.contacts));
 const air3 = s.clients.find((c) => c.id === "AIR001");
-check("Fijo 6012011589 no se guarda como WhatsApp", !air3.contacts.some((c) => c.phone === "6012011589") && air3.contacts.some((c) => c.phone === "3004975195"));
+check("Fijo 6015550111 no se guarda como WhatsApp", !air3.contacts.some((c) => c.phone === "6015550111") && air3.contacts.some((c) => c.phone === "3045550108"));
 const inv = s.clients.filter((c) => c.name === "Empresa Inventada Uno");
 check("Empresa repetida en el archivo se crea UNA vez con los dos números", inv.length === 1 && inv[0].contacts.length === 2, JSON.stringify(inv));
 check("Fila con solo un número corto/inválido (Bodega Pibox) es error y no crea cliente", !s.clients.some((c) => c.name === "Bodega Pibox"));
 // Generador: elegir contacto entre varios
-await go("generador"); await p.type("#gsearch", "ADL imp"); await sleep(150); await p.keyboard.press("ArrowDown"); await p.keyboard.press("Enter"); await sleep(250);
-check("Generador ofrece elegir entre los varios números del cliente", (await p.$$eval("select option", (o) => o.filter((x) => x.textContent.includes("3166924463")).length)) === 1);
+await go("generador"); await p.type("#gsearch", "Alfa Dem"); await sleep(150); await p.keyboard.press("ArrowDown"); await p.keyboard.press("Enter"); await sleep(250);
+check("Generador ofrece elegir entre los varios números del cliente", (await p.$$eval("select option", (o) => o.filter((x) => x.textContent.includes("3045550104")).length)) === 1);
 
 // ---------- Importación masiva con asignación de comercial ----------
 await go("clientes");
@@ -300,14 +302,14 @@ await clickText("Asignar", "dialog"); await sleep(400);
 s = await st();
 check("Reasignación en bloque: 40 clientes ahora de Juliana Rojas", s.clients.filter((c) => c.id.startsWith("M0") && c.owner === "Juliana Rojas").length === 40);
 // Reasignar uno con seguimiento: el seguimiento acompaña al nuevo dueño
-await p.evaluate(() => { const i = document.querySelector("#cq"); i.value = "ADL imp"; i.dispatchEvent(new Event("input", { bubbles: true })); });
+await p.evaluate(() => { const i = document.querySelector("#cq"); i.value = "Alfa Dem"; i.dispatchEvent(new Event("input", { bubbles: true })); });
 await clickText("Todos (148)", "main").catch(() => {});
 await p.evaluate(() => { const b = [...document.querySelectorAll("main .tabs button")].find((x) => x.textContent.startsWith("Todos")); b?.click(); }); await sleep(200);
 await p.evaluate(() => document.querySelector('tbody input[type=checkbox]').click()); await sleep(150);
 await p.evaluate(() => { const i = document.querySelector('main input[list="bulk-owners"]'); i.value = "Marta Prueba"; i.dispatchEvent(new Event("input", { bubbles: true })); });
 await clickText("Asignar", "main"); await p.waitForSelector("dialog[open]"); await clickText("Asignar", "dialog"); await sleep(400);
 s = await st();
-const adlC = s.clients.find((c) => c.id === "ADL001");
+const adlC = s.clients.find((c) => c.id === "ALF001");
 check("Reasignar un cliente con seguimiento actualiza también el comercial del seguimiento (con historial)", adlC.owner === "Marta Prueba" && s.followups[adlC.uid].owner === "Marta Prueba" && s.followups[adlC.uid].history.some((e) => e.type === "field" && e.field === "owner" && e.to === "Marta Prueba"));
 // Generador: solo mis clientes
 await go("generador");
@@ -315,10 +317,10 @@ await p.evaluate(() => { document.querySelector("#onlyMine").click(); document.q
 await p.type("#gsearch", "Masivo Cliente 07"); await sleep(200);
 check("«Solo mis clientes» muestra los de Juliana y la sugerencia indica el comercial", (await p.$$eval("#sugg li", (l) => l.length)) === 1 && (await p.$eval("#sugg li", (l) => l.textContent)).includes("de Juliana Rojas"));
 await p.evaluate(() => { const i = document.querySelector("#gsearch"); i.value = ""; });
-await p.type("#gsearch", "ADL imp"); await sleep(200);
-check("«Solo mis clientes» oculta clientes de otro comercial (ADL es de Marta Prueba)", (await p.$$eval("#sugg li", (l) => l.length)) === 0);
+await p.type("#gsearch", "Alfa Dem"); await sleep(200);
+check("«Solo mis clientes» oculta clientes de otro comercial (Alfa es de Marta Prueba)", (await p.$$eval("#sugg li", (l) => l.length)) === 0);
 await p.evaluate(() => document.querySelector("#onlyMine").click()); 
-await p.evaluate(() => { const i = document.querySelector("#gsearch"); i.value = "ADL imp"; i.dispatchEvent(new Event("input", { bubbles: true })); }); await sleep(200);
+await p.evaluate(() => { const i = document.querySelector("#gsearch"); i.value = "Alfa Dem"; i.dispatchEvent(new Event("input", { bubbles: true })); }); await sleep(200);
 check("Sin el filtro vuelve a aparecer", (await p.$$eval("#sugg li", (l) => l.length)) === 1);
 
 // ---------- Informes ----------
@@ -326,7 +328,7 @@ await go("informes");
 const kpis = await p.$$eval(".kpis .kpi", (k) => Object.fromEntries(k.map((x) => [x.querySelector("span").textContent, x.querySelector("b").textContent])));
 s = await st();
 check("Total en pantalla = clientes registrados", kpis["Total de clientes"] === String(s.clients.length), JSON.stringify(kpis));
-check("Indicadores: vencidos 1, contactos realizados 2 (ADL primer contacto + Airtempe interesado)", kpis["Seguimientos vencidos"] === "1" && kpis["Contactos realizados"] === "2", JSON.stringify(kpis));
+check("Indicadores: vencidos 1, contactos realizados 2 (Alfa primer contacto + Aire Demo interesado)", kpis["Seguimientos vencidos"] === "1" && kpis["Contactos realizados"] === "2", JSON.stringify(kpis));
 await clickText("Descargar informe Excel", "main"); await sleep(800);
 const rep = fs.readdirSync(D + "/dl").filter((f) => f.startsWith("informe-gerencial"));
 check("Informe Excel descargado", rep.length === 1, rep);
@@ -353,7 +355,7 @@ check("Respaldo JSON descargado", bk.length === 1);
 const nClients = (await st()).clients.length;
 await p.evaluate(() => { localStorage.clear(); });
 await p.reload(); await sleep(500);
-// tras limpiar, la app resiembra; restaurar el respaldo debe devolver los 106+2 clientes
+// tras limpiar, la app arranca VACÍA (ya no hay base incluida); restaurar el respaldo debe devolver todos los clientes
 await go("configuracion");
 await (await p.$("#restore")).uploadFile(D + "/dl/" + bk[0]); await p.waitForSelector("dialog[open]");
 await clickText("Reemplazar todo", "dialog"); await sleep(400);

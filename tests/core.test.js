@@ -13,7 +13,7 @@ const cfg = () => {
   c.commercial = { name: "Juliana Rojas", role: "Account Manager", area: "Comercial", signature: "" };
   return c;
 };
-const client = { uid: "c1", id: "AMB001", name: "Ambrosia Toy Store", contacts: [{ cid: "k", name: "Laura", phone: "3001234567", email: "a@b.co" }] };
+const client = { uid: "c1", id: "DEM001", name: "Tienda Demo Juguetes", contacts: [{ cid: "k", name: "Laura", phone: "3001234567", email: "a@b.co" }] };
 const render = (body, o = {}) => renderTemplate(body, buildValues({ config: o.config || cfg(), client, contact: client.contacts[0], zone: o.zone ?? "", now: o.now }), o);
 
 // ---------- Generador ----------
@@ -21,7 +21,7 @@ test("todas las variables se reemplazan; ninguna llave queda visible", () => {
   const all = VARIABLES.map((v) => `{{${v.key}}}`).join(" | ");
   const r = render(all, { zone: "Chapinero" });
   assert.ok(!r.text.includes("{{") && !r.text.includes("}}"));
-  assert.ok(r.text.includes("Ambrosia Toy Store") && r.text.includes("$10.500 COP") && r.text.includes("Account Manager") && r.text.includes("AMB001") && r.text.includes("Laura"));
+  assert.ok(r.text.includes("Tienda Demo Juguetes") && r.text.includes("$10.500 COP") && r.text.includes("Account Manager") && r.text.includes("DEM001") && r.text.includes("Laura"));
 });
 
 test("sin zona: desaparece 'para la zona de' completo y el mensaje queda natural", () => {
@@ -55,7 +55,7 @@ test("variable obligatoria vacía → advertencia, sin etiqueta visible", () => 
 test("variable desconocida se elimina y se reporta", () => {
   const r = render("Hola {{nombre_cliente}} {{inventada}}");
   assert.deepEqual(r.unknown, ["inventada"]);
-  assert.equal(r.text, "Hola Ambrosia Toy Store");
+  assert.equal(r.text, "Hola Tienda Demo Juguetes");
 });
 
 test("saludo automático usa hora de Colombia, no UTC", () => {
@@ -75,7 +75,7 @@ test("emojis: múltiples, compuestos y desactivables", () => {
   assert.ok(on.includes("👨‍👩‍👧") && on.includes("🇨🇴"));
   const off = render(body, { emojis: false }).text;
   assert.ok(!/\p{Extended_Pictographic}/u.test(off) && !off.includes("🇨🇴"));
-  assert.match(off, /Ambrosia Toy Store$/);
+  assert.match(off, /Tienda Demo Juguetes$/);
   assert.equal(stripEmojis("a👍🏽b"), "ab");
 });
 
@@ -262,7 +262,7 @@ test("persistencia: almacenamiento bloqueado no rompe la app y avisa", () => {
 });
 
 test("semilla v1 → v2 y normalización de estado antiguo", () => {
-  const seeded = seedClients([{ id: "AIR001", cliente: "Airtempe SAS", localidad: "Los martires" }], DEFAULT_CONFIG.zones);
+  const seeded = seedClients([{ id: "AIR001", cliente: "Aire Demo SAS", localidad: "Los martires" }], DEFAULT_CONFIG.zones);
   assert.equal(seeded[0].zone, "Los Mártires");
   const st = normalizeState({ clients: [{ uid: "q", id: "1", name: "Q" }] });
   assert.equal(st.templates.length, 1);

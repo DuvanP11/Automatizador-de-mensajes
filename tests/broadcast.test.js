@@ -90,8 +90,8 @@ test("estimateRun y guía de mismo día: duración razonable y riesgo coherente"
 });
 
 test("parseManualLines: separadores, números en el nombre y líneas sin teléfono", () => {
-  assert.deepEqual(parseManualLines("Ambrosia Toy Store, 300 123 4567\nAirtempe SAS;3004975195\nTienda 24 horas\t3001112233\n\nSolo nombre"), [
-    { name: "Ambrosia Toy Store", phone: "300 123 4567" }, { name: "Airtempe SAS", phone: "3004975195" }, { name: "Tienda 24 horas", phone: "3001112233" }, { name: "Solo nombre", phone: "" }]);
+  assert.deepEqual(parseManualLines("Tienda Demo Juguetes, 300 123 4567\nAire Demo SAS;3045550108\nTienda 24 horas\t3001112233\n\nSolo nombre"), [
+    { name: "Tienda Demo Juguetes", phone: "300 123 4567" }, { name: "Aire Demo SAS", phone: "3045550108" }, { name: "Tienda 24 horas", phone: "3001112233" }, { name: "Solo nombre", phone: "" }]);
   assert.deepEqual(parseManualLines("Pedro Pérez 3101234567"), [{ name: "Pedro Pérez", phone: "3101234567" }]);
 });
 
