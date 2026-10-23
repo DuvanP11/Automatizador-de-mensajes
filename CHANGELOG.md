@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.0 — Buscador de clientes y registro en la Auditoría
+- **Buscador del Generador:** al hacer clic se despliega la lista de clientes (A–Z, de 50 en 50) sin escribir nada, y al escribir busca por **nombre, número de teléfono (cualquier formato), correo**, razón social, ID, localidad y nombre del contacto. Los que empiezan por lo escrito salen primero y cada fila indica por qué coincidió («Coincide: …»). Funciona con teclado (↑ ↓ Enter) y avisa cuando no hay resultados.
+- **Registro en la Auditoría del Agente Comercial:** si entras por el acceso del menú del Agente, esta web le informa qué secciones abres y qué acciones haces (importar clientes, abrir WhatsApp, guardar una plantilla, descargar un respaldo…). **Privacidad por diseño:** solo viajan claves de una lista cerrada y, a lo sumo, un número de «cuántos»; el Agente las vuelve a validar y las convierte en frases fijas. Nunca salen nombres, teléfonos, correos, mensajes ni archivos de clientes. La firma de entrada llega en el `#` de la dirección (no se envía a ningún servidor), se guarda y se quita de la barra; caduca a las 12 h. Sin firma no se envía nada. Configuración lo explica en pantalla.
+- Pruebas nuevas: `tests/search.test.js`, `tests/audit.test.js`, `tests/audit-ui.test.js`; `tests/privacidad.test.js` ahora comprueba que las únicas conexiones son la apariencia y el registro, y que cada `track()` usa una clave fija.
+
 ## 2.4.1 — Sin datos de clientes en el repositorio
 - **Se retira la base incluida** (`data/clientes.json`: 105 nombres con ID y zona) que el repositorio público y el sitio servían a cualquiera. Ahora la web arranca **vacía** y cada persona carga sus propios clientes; lo que importa vive solo en su navegador.
 - **Pruebas sin datos reales:** nombres, teléfonos y correos de las pruebas, ejemplos y textos de ayuda pasan a ser ficticios; las pruebas de navegador usan una base inventada (`e2e/fake-base.mjs`).

@@ -1,4 +1,5 @@
 import { h, field, select, toast, downloadWorkbook, emptyState } from "./dom.js";
+import { track } from "./audit.js";
 import { buildRows, computeMetrics, INDICATOR_DEFS, pendingRows } from "../core/followup.js";
 import { buildReportWorkbook } from "../core/report.js";
 import { todayBogota } from "../core/util.js";
@@ -37,6 +38,7 @@ export function renderReports(root, ctx) {
     if (!rows.length) { toast("No hay filas con estos filtros para exportar", "err"); return; }
     const wb = buildReportWorkbook(XLSX, { rows, metrics, filters: f, statuses: S().config.statuses });
     downloadWorkbook(XLSX, wb, `informe-gerencial-${todayBogota()}.xlsx`);
+    track("report_download");
     toast("Informe Excel generado ✓");
   }
 

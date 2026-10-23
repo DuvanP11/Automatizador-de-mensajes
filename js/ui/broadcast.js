@@ -1,4 +1,5 @@
 import { h, field, toast, confirmDialog, openDialog, download, insertAtCursor } from "./dom.js";
+import { track } from "./audit.js";
 import { openImport } from "./clients.js";
 import { VARIABLES, whatsappUrl, buildValues, renderTemplate } from "../core/templates.js";
 import { normalizeText, nameKey, uid, validatePhone, todayBogota } from "../core/util.js";
@@ -115,6 +116,7 @@ export function renderBroadcast(root, ctx) {
       catch { toast("No se pudo guardar el archivo en este navegador (almacenamiento lleno o bloqueado).", "err", 6000); return false; }
       store.commit((d) => { const i = d.broadcasts.findIndex((b) => b.id === draft.id); i >= 0 ? (d.broadcasts[i] = JSON.parse(JSON.stringify(draft))) : d.broadcasts.push(JSON.parse(JSON.stringify(draft))); });
       v.broadcastId = draft.id; mediaFile = null;
+      track("bc_save");
       return true;
     }
 
@@ -223,7 +225,7 @@ export function renderBroadcast(root, ctx) {
       if (!(await confirmDialog({ title: "Preparar envío", message: lines.join(" "), confirmText: "Preparar cola" }))) return;
       const run = newRun({ id: uid("run"), broadcast: draft, items: built.items, pace: v.pace });
       store.commit((d) => { d.runs.unshift(run); d.runs = d.runs.slice(0, 20); });
-      v.runId = run.id; draw();
+      v.runId = run.id; track("bc_prepare", plan.ok.length); draw();
     }
     async function remove() {
       if (!(await confirmDialog({ title: "Eliminar comunicado", message: `Se borrará «${draft.name}» y su archivo adjunto. Los envíos ya preparados no se tocan.`, confirmText: "Eliminar", danger: true }))) return;
@@ -339,6 +341,7 @@ export function renderBroadcast(root, ctx) {
         catch (e) { toast(`${e.message} Descárgala y adjúntala con el clip 📎.`, "err", 9000); }
       } else if (blob) toast("Adjunta el video con el clip 📎 (usa «Descargar video» si no lo tienes a la mano).", "info", 9000);
       window.open(whatsappUrl(waNumber, withText ? text : ""), "_blank", "noopener");
+      track("bc_wa_open");
     }
     /** Pregunta cómo salió el mensaje, para no dar por enviado algo que salió sin la foto. */
     function askMedia() {
@@ -400,6 +403,7 @@ export function renderBroadcast(root, ctx) {
       const q = (s) => `"${String(s).replace(/"/g, '""')}"`;
       const rows = [["Cliente", "Teléfono", "Redacción", "Estado", "Enviado el", "Salió sin archivo"], ...run.items.map((i) => [i.name, `+${i.waNumber}`, String.fromCharCode(64 + i.variant), i.status, i.sentAt, i.noMedia ? "SÍ" : ""])];
       download("﻿" + rows.map((r) => r.map(q).join(",")).join("\r\n"), `${run.name.replace(/[^\w-]+/g, "_")}.csv`, "text/csv;charset=utf-8");
+      track("bc_export");
     }
 
     root.append(h("div", { class: "page-head" }, h("div", {}, h("h1", { text: "Envío de comunicado" }), h("p", { text: "Un cliente a la vez. El avance se guarda: puedes cerrar y seguir después." })),

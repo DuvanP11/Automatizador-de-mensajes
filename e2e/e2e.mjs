@@ -315,13 +315,13 @@ check("Reasignar un cliente con seguimiento actualiza también el comercial del 
 await go("generador");
 await p.evaluate(() => { document.querySelector("#onlyMine").click(); document.querySelector("#gsearch").value = ""; });
 await p.type("#gsearch", "Masivo Cliente 07"); await sleep(200);
-check("«Solo mis clientes» muestra los de Juliana y la sugerencia indica el comercial", (await p.$$eval("#sugg li", (l) => l.length)) === 1 && (await p.$eval("#sugg li", (l) => l.textContent)).includes("de Juliana Rojas"));
+check("«Solo mis clientes» muestra los de Juliana y la sugerencia indica el comercial", (await p.$$eval("#sugg li[role=option]", (l) => l.length)) === 1 && (await p.$eval("#sugg li[role=option]", (l) => l.textContent)).includes("de Juliana Rojas"));
 await p.evaluate(() => { const i = document.querySelector("#gsearch"); i.value = ""; });
 await p.type("#gsearch", "Alfa Dem"); await sleep(200);
-check("«Solo mis clientes» oculta clientes de otro comercial (Alfa es de Marta Prueba)", (await p.$$eval("#sugg li", (l) => l.length)) === 0);
+check("«Solo mis clientes» oculta clientes de otro comercial (Alfa es de Marta Prueba)", (await p.$$eval("#sugg li[role=option]", (l) => l.length)) === 0);
 await p.evaluate(() => document.querySelector("#onlyMine").click()); 
 await p.evaluate(() => { const i = document.querySelector("#gsearch"); i.value = "Alfa Dem"; i.dispatchEvent(new Event("input", { bubbles: true })); }); await sleep(200);
-check("Sin el filtro vuelve a aparecer", (await p.$$eval("#sugg li", (l) => l.length)) === 1);
+check("Sin el filtro vuelve a aparecer", (await p.$$eval("#sugg li[role=option]", (l) => l.length)) === 1);
 
 // ---------- Informes ----------
 await go("informes");

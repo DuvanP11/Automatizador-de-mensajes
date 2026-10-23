@@ -1,10 +1,12 @@
 import { h, field, select, toast, confirmDialog, download, openDialog } from "./dom.js";
+import { track } from "./audit.js";
 import { STAGES } from "../core/config.js";
 import { formatMoney, deepClone, uid } from "../core/util.js";
 import { greetingFor } from "../core/templates.js";
 import { isValidEmail } from "../core/util.js";
 import { AGENTE_COMERCIAL_URL } from "../core/links.js";
 import { getPrefs, updatePrefs } from "./prefs.js";
+import { isReporting } from "./audit.js";
 
 const ROLES = ["Gestor comercial", "Account Manager", "Ejecutivo comercial", "Asesor comercial"];
 
@@ -69,6 +71,7 @@ export function renderSettings(root, ctx) {
     cfg.offer.rate = rate; cfg.defaultCountryCode = (cfg.defaultCountryCode || "").trim();
     cfg.commercial.name = cfg.commercial.name.trim(); cfg.ideasEmail = (cfg.ideasEmail || "").trim();
     store.commit((d) => { d.config = deepClone(cfg); });
+    track("config_save");
     cfg = deepClone(S().config); rateText = String(cfg.offer.rate); rateIn.value = rateText; mark();
     toast("Configuración guardada ✓");
   }
@@ -90,7 +93,7 @@ export function renderSettings(root, ctx) {
     try {
       const next = store.parseBackup(await f.text());
       if (!(await confirmDialog({ title: "Restaurar respaldo", message: `El respaldo tiene ${next.clients.length} clientes y ${next.templates.length} plantillas. Reemplazará TODO lo que hay ahora en este navegador (${S().clients.length} clientes).`, confirmText: "Reemplazar todo", danger: true }))) { restoreIn.value = ""; return; }
-      ctx.dirty = null; store.replaceAll(next); toast("Respaldo restaurado ✓"); root.replaceChildren(); renderSettings(root, ctx);
+      ctx.dirty = null; store.replaceAll(next); track("backup_restore"); toast("Respaldo restaurado ✓"); root.replaceChildren(); renderSettings(root, ctx);
     } catch (e) { toast(e.message, "err", 5000); restoreIn.value = ""; }
   });
   async function wipe() {
@@ -98,7 +101,7 @@ export function renderSettings(root, ctx) {
     const go = h("button", { class: "btn btn-danger", type: "button", text: "Borrar todo", disabled: true });
     input.addEventListener("input", () => (go.disabled = input.value !== "BORRAR"));
     const dlg = openDialog("Borrar todos los datos", h("div", {}, h("p", { text: "Se eliminarán clientes, plantillas, seguimientos y configuración de ESTE navegador. Descarga un respaldo primero. Escribe BORRAR para continuar." }), input, h("div", { class: "actions end" }, go)));
-    go.addEventListener("click", () => { ctx.dirty = null; store.replaceAll({ seeded: true }); dlg.close(); toast("Datos borrados", "info"); root.replaceChildren(); renderSettings(root, ctx); });
+    go.addEventListener("click", () => { ctx.dirty = null; store.replaceAll({ seeded: true }); track("data_wipe"); dlg.close(); toast("Datos borrados", "info"); root.replaceChildren(); renderSettings(root, ctx); });
   }
 
   root.append(
@@ -122,13 +125,16 @@ export function renderSettings(root, ctx) {
       h("div", { class: "actions" }, h("a", { class: "btn btn-secondary", href: `${AGENTE_COMERCIAL_URL}/apariencia`, target: "_blank", rel: "noopener", text: "Cambiar la apariencia en el Agente Comercial ↗" })),
       h("div", { class: "check" }, h("input", { type: "checkbox", id: "tipsChk", checked: getPrefs().tips, onchange: (e) => { if (!updatePrefs({ tips: e.target.checked })) toast("No se pudo guardar esta preferencia en este navegador.", "err", 5000); } }),
         h("label", { for: "tipsChk", text: "Mostrar ayudas flotantes al pasar el mouse sobre botones y opciones" })),
-      h("p", { class: "hint", text: "Esta casilla es solo de tu navegador y se aplica al instante; no necesita «Guardar configuración»." })),
+      h("p", { class: "hint", text: "Esta casilla es solo de tu navegador y se aplica al instante; no necesita «Guardar configuración»." }),
+      h("div", { class: "alert info", text: isReporting()
+        ? "Entraste desde el Agente Comercial: esta web le informa a su Auditoría qué secciones abres y qué acciones haces (por ejemplo «importó clientes» o «abrió WhatsApp»). Nunca envía nombres, teléfonos, correos, mensajes ni archivos de tus clientes: tus datos siguen solo en este navegador."
+        : "Si entras desde el Agente Comercial, esta web le informa a su Auditoría qué secciones abres y qué acciones haces (solo frases como «importó clientes»), nunca los datos de tus clientes. Esta sesión no está informando porque no entraste desde allá." })),
     h("section", { class: "card" }, h("h2", { text: "Estados de seguimiento" }), statusHost),
     h("section", { class: "card" }, h("h2", { text: "Datos y respaldo" }),
       h("div", { class: "alert info", text: "Tus datos viven solo en este navegador. No hay servidor ni copia automática: si borras los datos del sitio o cambias de equipo se pierden. Descarga respaldos con frecuencia." }),
       S().lastBackupAt ? h("p", { text: `Último respaldo descargado: ${new Date(S().lastBackupAt).toLocaleString("es-CO")}` }) : h("p", { class: "muted", text: "Todavía no has descargado un respaldo." }),
       h("div", { class: "actions" },
-        h("button", { class: "btn btn-primary", type: "button", text: "Descargar respaldo (JSON)", onclick: () => { download(store.exportBackup(), `respaldo-automatizador-${new Date().toISOString().slice(0, 10)}.json`, "application/json"); store.markBackup(); toast("Respaldo descargado ✓"); } }),
+        h("button", { class: "btn btn-primary", type: "button", text: "Descargar respaldo (JSON)", onclick: () => { download(store.exportBackup(), `respaldo-automatizador-${new Date().toISOString().slice(0, 10)}.json`, "application/json"); store.markBackup(); track("backup_download"); toast("Respaldo descargado ✓"); } }),
         h("button", { class: "btn btn-danger", type: "button", text: "Borrar todos los datos…", onclick: wipe })),
       field("Restaurar desde un respaldo", restoreIn, "Reemplaza todo el contenido actual (se pide confirmación).")),
   );
