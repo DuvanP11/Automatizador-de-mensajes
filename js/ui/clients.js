@@ -2,6 +2,7 @@ import { h, field, select, toast, confirmDialog, openDialog, downloadWorkbook, e
 import { track } from "./audit.js";
 import { assignOwner, sheetToMatrix, detectMapping, extractRecords, planImport, applyPlan, summarizePlan, resolveReview, errorReportRows, mappingIsUsable, FIELD_LABELS, statusLabel } from "../core/importer.js";
 import { buildSimpleWorkbook } from "../core/report.js";
+import { pedirContactos } from "../core/picap-bridge.js";
 import { updateFollowup } from "../core/followup.js";
 import { normalizeText, nameKey, validatePhone, isValidEmail, uid } from "../core/util.js";
 
@@ -151,11 +152,16 @@ export function renderClients(root, ctx) {
 
   root.append(
     h("div", { class: "page-head" }, h("div", {}, h("h1", { text: "Clientes y contactos" }), h("p", { text: "Base de clientes y directorio de teléfonos. Un cliente puede tener varios contactos." })),
-      h("div", { class: "actions" }, undoBtn, h("button", { class: "btn btn-ghost", type: "button", text: "+ Nuevo cliente", onclick: () => openEdit(null) }), h("button", { class: "btn btn-ghost", type: "button", text: "Agregar o sincronizar clientes", onclick: () => openImport(ctx, () => { undoBtn.hidden = !ctx.lastImportUndo; drawTable(); }) }), h("button", { class: "btn btn-primary", type: "button", text: "📞 Importar teléfonos de contacto", onclick: () => openImport(ctx, () => { undoBtn.hidden = !ctx.lastImportUndo; drawTable(); }, "directory") }))),
+      h("div", { class: "actions" }, undoBtn, h("button", { class: "btn btn-ghost", type: "button", text: "+ Nuevo cliente", onclick: () => openEdit(null) }), h("button", { class: "btn btn-ghost", type: "button", text: "Agregar o sincronizar clientes", onclick: () => openImport(ctx, () => { undoBtn.hidden = !ctx.lastImportUndo; drawTable(); }) }), h("button", { class: "btn btn-primary", type: "button", text: "🔄 Traer contactos de Picap", onclick: () => openImport(ctx, () => { undoBtn.hidden = !ctx.lastImportUndo; drawTable(); }, "clients", true) }), h("button", { class: "btn btn-primary", type: "button", text: "📞 Importar teléfonos de contacto", onclick: () => openImport(ctx, () => { undoBtn.hidden = !ctx.lastImportUndo; drawTable(); }, "directory") }))),
     h("div", { class: `alert ${S().clients.some((c) => c.contacts.some((x) => x.phone)) ? "info" : "warn"}`, id: "phoneStat", text: phoneStat() }),
     h("div", { class: "card" }, field("Buscar", search), tableHost),
   );
   drawTable();
+  // Llegó desde «Consulta de Prospectos» de comercial.picap.io: abre directo el asistente con los contactos de la base.
+  if (!ctx.picapAuto && new URLSearchParams(location.search).get("origen") === "comercial" && window.opener) {
+    ctx.picapAuto = true;
+    setTimeout(() => openImport(ctx, () => { undoBtn.hidden = !ctx.lastImportUndo; drawTable(); }, "clients", true), 0);
+  }
 }
 
 function phoneStat() {
@@ -186,12 +192,12 @@ export function commercials(state) {
 // ---------------------------------------------------------------------------------------------
 // Asistente de importación / sincronización
 
-export function openImport(ctx, onDone, presetKind = "") {
+export function openImport(ctx, onDone, presetKind = "", fromPicap = false) {
   const { store, XLSX } = ctx;
   const body = h("div");
   // replaceChildren(null) escribiría la palabra «null»: se filtran los vacíos.
   const setBody = (...k) => body.replaceChildren(...k.flat().filter((x) => x !== null && x !== undefined && x !== false));
-  const dlg = openDialog("Agregar o sincronizar clientes", body, { wide: true });
+  const dlg = openDialog(fromPicap ? "Traer contactos de Picap" : "Agregar o sincronizar clientes", body, { wide: true });
   const W = { kind: presetKind || "clients", wb: null, sheet: "", matrix: [], det: null, mapping: {}, headerRow: 0, base: [], items: [], owner: "", overwrite: false, fileName: "", tab: "all" };
 
   function templateFile() {
@@ -276,7 +282,7 @@ export function openImport(ctx, onDone, presetKind = "") {
   }
 
   function step3() {
-    const recs = extractRecords(W.matrix, W.headerRow, W.mapping);
+    const recs = W.picap || extractRecords(W.matrix, W.headerRow, W.mapping);
     if (!recs.length) { toast("El archivo no tiene filas de datos debajo de los encabezados", "err"); return; }
     W.base = planImport(store.state.clients, recs, { kind: W.kind, defaultCountryCode: store.state.config.defaultCountryCode });
     // Si el archivo no trae columna de comercial, por defecto quedan a nombre de quien importa (se puede cambiar o vaciar).
@@ -325,7 +331,7 @@ export function openImport(ctx, onDone, presetKind = "") {
       shown.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Fila", "Resultado", "Cliente", "Detalle / acción"].map((t) => h("th", { scope: "col", text: t })))), h("tbody", {}, rows))) : emptyState("Nada en esta categoría", ""),
       shown.length > 200 ? h("p", { class: "muted", text: `Mostrando 200 de ${shown.length} filas (todas se procesan al confirmar).` }) : null,
       h("div", { class: "actions end" },
-        h("button", { class: "btn btn-ghost", type: "button", text: "← Mapeo de columnas", onclick: step2 }),
+        W.picap ? h("button", { class: "btn btn-ghost", type: "button", text: "Cancelar", onclick: () => dlg.close() }) : h("button", { class: "btn btn-ghost", type: "button", text: "← Mapeo de columnas", onclick: step2 }),
         (sum.errors || sum.review || sum.warnings) ? h("button", { class: "btn btn-ghost", type: "button", text: "Descargar reporte de errores", onclick: () => downloadWorkbook(XLSX, buildSimpleWorkbook(XLSX, errorReportRows(W.items), "Errores de importación", [18, 18, 70, 30, 14, 24, 18, 28]), `errores-importacion-${new Date().toISOString().slice(0, 10)}.xlsx`) }) : null,
         h("button", { class: "btn btn-primary", type: "button", text: `Confirmar importación (${applicable} filas con cambios)`, disabled: applicable === 0, onclick: confirm })));
   }
@@ -401,7 +407,19 @@ export function openImport(ctx, onDone, presetKind = "") {
     const owned = W.owner.trim() ? ` · comercial: ${W.owner.trim()}` : "";
     toast(`Importación aplicada: ${stats.created} nuevos, ${stats.updated} actualizados, ${stats.contactsAdded} contactos agregados${owned}`, "ok", 6000);
   }
-  step1();
+  // Contactos desde la base de Picap (ClickHouse), entregados por comercial.picap.io.
+  async function stepPicap() {
+    setBody(h("p", {}, h("span", { class: "spinner", "aria-hidden": "true" }), " Pidiendo los contactos a comercial.picap.io… (puede tardar un momento)"));
+    try {
+      const recs = await pedirContactos();
+      if (!recs.length) { setBody(h("div", { class: "alert warn", text: "comercial.picap.io no devolvió clientes con teléfono o correo." }), h("div", { class: "actions end" }, h("button", { class: "btn btn-ghost", type: "button", text: "Cerrar", onclick: () => dlg.close() }))); return; }
+      W.picap = recs; W.mapping = { name: 0, id: 1, phone: 2, email: 3, owner: 4 };
+      step3();
+    } catch (e) {
+      setBody(h("div", { class: "alert err", text: e.message }), h("div", { class: "actions end" }, h("button", { class: "btn btn-ghost", type: "button", text: "Cerrar", onclick: () => dlg.close() }), h("button", { class: "btn btn-primary", type: "button", text: "Reintentar", onclick: stepPicap })));
+    }
+  }
+  if (fromPicap) stepPicap(); else step1();
 }
 
 function fieldLabel(f) {
