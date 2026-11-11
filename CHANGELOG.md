@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.7.0 — Comunicados en lotes y ventana de WhatsApp a un lado
+- **«Preparar lote» (por defecto 5, hasta 10):** muestra los siguientes clientes juntos, cada uno con «Abrir chat», «✓ Enviado» y «Omitir». Al cerrar el lote se aplica una pausa igual a la suma de las pausas de cada envío; el tope diario sigue valiendo.
+- **WhatsApp en una ventana emergente a la derecha de la web:** «Abrir chat» (y «Abrir WhatsApp») reutilizan siempre la misma ventana, así ves cómo queda el mensaje y lo envías tú cuando quieras. Ya no se amontonan pestañas ni WhatsApp Web pide «Usar aquí». Si el navegador la bloquea, avisa que permitas las ventanas emergentes.
+
 ## 2.6.0 — Contactos de Picap (ClickHouse) en Clientes y contactos
 - **«🔄 Traer contactos de Picap»** (Clientes y contactos): trae, por cada cliente con KAM, **todos sus celulares y correos** que hoy están en la base de Picap, los muestra en el asistente de importación (nuevos / actualizados / duplicados) y solo se guardan al confirmar. Se abre solo cuando entras desde **Consulta de Prospectos** en comercial.picap.io.
 - **Privacidad:** los datos NO están en este repositorio. Los entrega comercial.picap.io (con sesión) por `postMessage` a la pestaña que abrió esta web; solo se acepta ese origen y esa pestaña. Quedan únicamente en el navegador de quien los trae. Sin pestaña de origen, avisa cómo hacerlo.

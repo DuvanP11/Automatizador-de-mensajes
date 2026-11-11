@@ -308,6 +308,7 @@ export function renderBroadcast(root, ctx) {
           } }), h("label", { for: "bcBlockRun", text: "Bloquear «Abrir WhatsApp» durante la pausa (recomendado)" })),
           p.pending ? h("div", { class: "actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Regenerar textos pendientes", title: "Vuelve a sortear la redacción de los clientes que faltan, usando el comunicado guardado (con sus frases intercambiables).", onclick: regenTexts })) : null),
         !cur ? h("div", { class: "alert ok", text: "Terminaste la cola. Todos los clientes fueron enviados u omitidos." })
+          : (run.batch || []).some((u) => run.items.find((i) => i.uid === u && i.status === "pending")) ? batchCard(run)
           : capHit ? h("div", { class: "alert warn", text: `Llegaste al tope de ${cap} envíos de hoy. Continúa mañana desde «Envíos preparados»: lo pendiente se conserva.` })
           : h("section", { class: "card", "aria-labelledby": "h-cur" },
             h("h2", { id: "h-cur", text: `Siguiente: ${cur.name}` }),
@@ -322,6 +323,9 @@ export function renderBroadcast(root, ctx) {
               h("button", { class: "btn btn-primary", type: "button", id: "bcOpen", text: label(wait), disabled: wait > 0 && blocking(run), onclick: () => openChat(cur.waNumber, cur.text) }),
               h("button", { class: "btn btn-secondary", type: "button", text: "✓ Ya lo envié", onclick: () => markSent(cur) }),
               h("button", { class: "btn btn-ghost", type: "button", text: "Omitir", onclick: () => { mut((r) => { r.items.find((i) => i.uid === cur.uid).status = "skipped"; }); paint(); } })),
+            h("div", { class: "actions", style: "align-items:center" },
+              h("label", { for: "bcBatchN", text: "Enviar en lote de" }), h("input", { id: "bcBatchN", type: "number", min: 1, max: 10, value: batchSize(), style: "width:70px", onchange: (e) => { v.batchSize = e.target.value; } }),
+              h("button", { class: "btn btn-secondary", type: "button", text: "Preparar lote", disabled: wait > 0 && blocking(run), title: "Muestra los siguientes clientes juntos para despacharlos uno tras otro sin volver a esta pantalla.", onclick: startBatch })),
             blob ? h("p", { class: "hint", text: "Pasos: 1) «Abrir WhatsApp»; 2) pega la imagen con Ctrl+V (o adjunta el video con el clip 📎) en esa conversación; 3) envía; 4) vuelve aquí y pulsa «Ya lo envié». Prueba primero con un cliente tuyo para ver cómo queda el texto junto al archivo." }) : h("p", { class: "hint", text: "Pasos: «Abrir WhatsApp», envía el mensaje y vuelve a pulsar «Ya lo envié»." }),
             h("div", { class: "check" }, logChk, h("label", { for: "bcLog", text: "Anotar el contacto en Seguimiento comercial" }))),
         h("section", { class: "card" }, h("h3", { text: "Cola" }),
@@ -340,7 +344,12 @@ export function renderBroadcast(root, ctx) {
         try { await copyImageToClipboard(blob); toast("Imagen copiada ✓ En WhatsApp pulsa ⌘V (Mac) o Ctrl+V (Windows) para pegarla antes de enviar.", "ok", 9000); }
         catch (e) { toast(`${e.message} Descárgala y adjúntala con el clip 📎.`, "err", 9000); }
       } else if (blob) toast("Adjunta el video con el clip 📎 (usa «Descargar video» si no lo tienes a la mano).", "info", 9000);
-      window.open(whatsappUrl(waNumber, withText ? text : ""), "_blank", "noopener");
+      // Siempre en la MISMA pestaña con nombre: WhatsApp Web solo funciona en una pestaña a la vez (varias dan «Usar aquí») y así no se amontonan.
+      // Ventana emergente a la derecha de esta web (se reutiliza): ahí ves cómo queda el mensaje y lo envías tú cuando quieras.
+      const W = 520, H = Math.min(820, (screen.availHeight || 800) - 60), L = Math.max(0, (screen.availWidth || 1200) - W - 20);
+      const w = window.open(whatsappUrl(waNumber, withText ? text : ""), "pibox_wa", `popup=yes,width=${W},height=${H},left=${L},top=30`);
+      try { if (w) w.opener = null; } catch { /* ya es otra página: no hace falta */ }
+      if (!w) toast("El navegador bloqueó la ventana de WhatsApp. Permite las ventanas emergentes para esta web.", "err", 7000);
       track("bc_wa_open");
     }
     /** Pregunta cómo salió el mensaje, para no dar por enviado algo que salió sin la foto. */
@@ -380,12 +389,21 @@ export function renderBroadcast(root, ctx) {
     async function markSent(cur) {
       let noMedia = false;
       if (blob) { const ans = await askMedia(); if (!ans) return; noMedia = ans === "no"; }
+      commitSent(cur, noMedia, false);
+    }
+
+    /** Marca un cliente como enviado y lo anota en Seguimiento. En lote, la pausa se pone al cerrar el lote completo (suma de las pausas de cada uno). */
+    function commitSent(cur, noMedia, inBatch) {
       const run = get();
-      const delay = nextDelaySeconds(run.pace.minDelay, run.pace.maxDelay);
       const now = new Date();
       mut((r, d) => {
         const it = r.items.find((i) => i.uid === cur.uid); it.status = "sent"; it.sentAt = now.toISOString(); it.noMedia = noMedia;
-        r.nextAt = Date.now() + delay * 1000;
+        const stillInBatch = inBatch && (r.batch || []).some((u) => r.items.find((i) => i.uid === u && i.status === "pending"));
+        if (!inBatch) r.nextAt = Date.now() + nextDelaySeconds(run.pace.minDelay, run.pace.maxDelay) * 1000;
+        else if (!stillInBatch) { // se cerró el lote: pausa = lo que habrían sumado los envíos de uno en uno
+          const n = (r.batch || []).length; let total = 0; for (let k = 0; k < n; k++) total += nextDelaySeconds(run.pace.minDelay, run.pace.maxDelay);
+          r.nextAt = Date.now() + total * 1000; r.batch = [];
+        }
         const c = d.clients.find((x) => x.uid === cur.uid);
         if (logChk.checked && c) {
           const fu = d.followups[c.uid] || newFollowup(c.uid, d.config.statuses, { owner: c.owner || "" });
@@ -397,6 +415,42 @@ export function renderBroadcast(root, ctx) {
         }
       });
       paint();
+    }
+
+    // ---- Lote: N clientes a la vista (por defecto 5) con sus botones; cada chat se abre con un clic, en la misma pestaña de WhatsApp. ----
+    const batchSize = () => Math.max(1, Math.min(10, Math.round(Number(v.batchSize) || 5)));
+    function startBatch() {
+      const run = get(), room = Math.max(0, run.pace.dailyCap - sentTodayCount(run));
+      const take = run.items.filter((i) => i.status === "pending").slice(0, Math.min(batchSize(), room));
+      if (!take.length) return;
+      mut((r) => { r.batch = take.map((i) => i.uid); }); paint();
+    }
+    async function batchSend(it) {
+      let noMedia = false;
+      if (blob) { const ans = await askMedia(); if (!ans) return; noMedia = ans === "no"; }
+      commitSent(it, noMedia, true);
+    }
+    function batchSkip(it) {
+      mut((r) => {
+        r.items.find((i) => i.uid === it.uid).status = "skipped";
+        if (!(r.batch || []).some((u) => r.items.find((i) => i.uid === u && i.status === "pending"))) r.batch = [];
+      }); paint();
+    }
+    function batchCard(run) {
+      const items = (run.batch || []).map((u) => run.items.find((i) => i.uid === u)).filter(Boolean);
+      const left = items.filter((i) => i.status === "pending").length;
+      return h("section", { class: "card", "aria-labelledby": "h-batch" },
+        h("h2", { id: "h-batch", text: `Lote en curso · quedan ${left} de ${items.length}` }),
+        blob ? h("p", { class: "hint", text: isImage() ? "Cada «Abrir chat» abre la ventana de WhatsApp a un lado y copia la imagen: pégala con ⌘V / Ctrl+V antes de enviar." : "Adjunta el video con el clip 📎 en cada chat." }) : null,
+        h("div", { class: "table-wrap" }, h("table", {}, h("tbody", {}, items.map((i) => h("tr", {},
+          h("td", {}, h("strong", { text: i.name }), h("div", { class: "muted", text: `+${i.waNumber} · redacción ${String.fromCharCode(64 + i.variant)}` })),
+          h("td", {}, i.status === "pending"
+            ? h("div", { class: "actions" },
+              h("button", { class: "btn btn-primary btn-sm", type: "button", text: "Abrir chat", onclick: () => openChat(i.waNumber, i.text) }),
+              h("button", { class: "btn btn-secondary btn-sm", type: "button", text: "✓ Enviado", onclick: () => batchSend(i) }),
+              h("button", { class: "btn btn-ghost btn-sm", type: "button", text: "Omitir", onclick: () => batchSkip(i) }))
+            : h("span", { class: `badge ${i.status === "sent" ? "ok" : "warn"}`, text: i.status === "sent" ? "Enviado" : "Omitido" }))))))),
+        h("p", { class: "hint", text: "Al terminar el lote se aplica una pausa antes del siguiente, equivalente a la suma de las pausas de cada envío." }));
     }
 
     function exportCsv(run) {
